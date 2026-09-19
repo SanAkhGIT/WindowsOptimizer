@@ -158,10 +158,10 @@ class MainWindow(QMainWindow):
         apps_button.clicked.connect(lambda: self._navigate(3))
         tl.addWidget(apps_button)
 
-        refresh_button = QPushButton("↻")
-        refresh_button.setToolTip("Refresh system overview")
-        refresh_button.clicked.connect(self.refresh)
-        tl.addWidget(refresh_button)
+        self.global_refresh_button = QPushButton("↻")
+        self.global_refresh_button.setToolTip("Refresh system overview")
+        self.global_refresh_button.clicked.connect(self.refresh)
+        tl.addWidget(self.global_refresh_button)
         main_layout.addWidget(topbar)
 
         self.stack = QStackedWidget()
@@ -421,6 +421,9 @@ class MainWindow(QMainWindow):
         self.page_title.setText(self.NAV[index][1])
 
     def refresh(self):
+        if self._busy or self._closing:
+            self.logger.info("Ignoring overview refresh while an operation is active or window is closing")
+            return
         self.admin.setText("Administrator" if is_admin() else "Standard user")
         self.tweaks = all_tweaks()
         self._render_tweaks()
@@ -728,6 +731,9 @@ class MainWindow(QMainWindow):
 
         if not enabled:
             self._operation_control_states = {}
+            if hasattr(self, "global_refresh_button"):
+                self._operation_control_states[self.global_refresh_button] = self.global_refresh_button.isEnabled()
+                self.global_refresh_button.setEnabled(False)
             for index in range(self.stack.count()):
                 page = self.stack.widget(index)
                 if page is None:
