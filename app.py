@@ -25,7 +25,8 @@ class MainWindow(QMainWindow):
   self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab()
  def _build_tweaks_tab(self):
   page=QWidget(); lay=QVBoxLayout(page); controls=QHBoxLayout(); self.profile=QComboBox(); self.profile.addItem("Custom",None)
-  for p in load_profiles(): self.profile.addItem(p.get("name",p["id"]),p); self.profile.currentIndexChanged.connect(self.select_profile); controls.addWidget(self.profile)
+  for p in load_profiles(): self.profile.addItem(p.get("name",p["id"]),p)
+  self.profile.currentIndexChanged.connect(self.select_profile); controls.addWidget(self.profile)
   for text,fn in [("Recommended",self.select_recommended),("Clear",self.clear_selection)]: b=QPushButton(text); b.clicked.connect(fn); controls.addWidget(b)
   controls.addStretch(); lay.addLayout(controls); self.tweak_tabs=QTabWidget(); lay.addWidget(self.tweak_tabs); self.tabs.addTab(page,"Tweaks")
  def refresh(self):
