@@ -66,8 +66,7 @@ class MainWindow(QMainWindow):
         sl.setContentsMargins(16, 20, 16, 18)
         sl.setSpacing(6)
 
-        brand = QLabel("WINDOWS
-OPTIMIZER")
+        brand = QLabel("WINDOWS\nOPTIMIZER")
         brand.setStyleSheet("font-size:16pt;font-weight:800;letter-spacing:1px;color:#f5f8fc;")
         sl.addWidget(brand)
         sub = QLabel("SYSTEM CONTROL CENTER")
@@ -119,7 +118,7 @@ OPTIMIZER")
 
         apps_button = QPushButton("Install Apps")
         apps_button.setObjectName("primary")
-        apps_button.clicked.connect(lambda: self._navigate(2))
+        apps_button.clicked.connect(lambda: self._navigate(3))
         tl.addWidget(apps_button)
 
         refresh_button = QPushButton("↻")
@@ -297,8 +296,7 @@ OPTIMIZER")
             self.appx_panel.scan()
         self.health.setText("● Live dashboard")
         self.output.setPlainText(
-            f"SCAN COMPLETE
-{len(self.tweaks)} operations available • "
+            f"SCAN COMPLETE\n{len(self.tweaks)} operations available • "
             f"{sum(t.recommended for t in self.tweaks)} recommended"
         )
         if hasattr(self, "dashboard"):
@@ -370,8 +368,7 @@ OPTIMIZER")
 
     def create_backup(self):
         try:
-            self.output.setPlainText(f"BACKUP CREATED
-{self.backup.create()}")
+            self.output.setPlainText(f"BACKUP CREATED\n{self.backup.create()}")
         except Exception as exc:
             QMessageBox.critical(self, "Backup failed", str(exc))
 
@@ -436,13 +433,11 @@ OPTIMIZER")
         self.output.setPlainText(str(value))
 
     def _show_error(self, error):
-        self.output.setPlainText(f"Operation failed:
-{error}")
+        self.output.setPlainText(f"Operation failed:\n{error}")
 
     def _show_apply_results(self, results):
         self.output.setPlainText(
-            "
-".join(
+            "\n".join(
                 f"{result.tweak_id}: {result.status} — {result.message} — {result.verification}"
                 for result in results
             )
@@ -457,10 +452,7 @@ OPTIMIZER")
 
     def show_power(self):
         self._run_job(
-            lambda: power_current() + "
-
-Available plans:
-" + power_plans(),
+            lambda: power_current() + "\n\nAvailable plans:\n" + power_plans(),
             done=self._show_result,
             fail=self._show_error,
         )
