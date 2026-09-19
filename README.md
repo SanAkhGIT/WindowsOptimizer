@@ -8,12 +8,12 @@ It is designed as a long-lived local Windows utility rather than a collection of
 
 ## Current capabilities
 
-- PySide6 desktop GUI with category-based operation views
+- Modern PySide6 desktop GUI with sidebar navigation, live system cockpit and centralized dark theme
 - Windows build, CPU, GPU, RAM, disk and laptop/desktop discovery
 - Administrator detection
 - Registry snapshots before changes
 - Windows System Restore point integration
-- Background execution for long-running operations
+- Background execution for long-running operations and hardware telemetry
 - Operation verification and machine-readable logs
 - Risk/reversibility/restart metadata
 - Taskbar, transparency and wallpaper controls
@@ -54,6 +54,7 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Operation logging
 - [x] Verification foundation
 - [ ] Full rollback transactions
+- [x] Centralized UI theme and responsive dashboard
 
 ### Windows management
 - [x] Startup inventory
@@ -83,7 +84,7 @@ The project takes broad feature inspiration from established Windows utilities s
 ### Software installer
 - WinUtil-style searchable, categorized WinGet application catalog
 - Multi-select installation with exact package IDs and source selection
-- FOSS filter and screenshot-app quick preset (Chrome, Steam, Netflix, qBittorrent, Spotify, PowerShell and OneNote)
+- FOSS filter and screenshot-app quick preset (Chrome, Steam, Netflix, qBittorrent, Spotify, PowerShell, LM Studio, Stremio, JDownloader 2 and Bluetooth Audio Receiver)
 - Microsoft Store packages are explicitly marked instead of being mixed silently with winget packages
 
 ### Browser integrations
@@ -117,3 +118,15 @@ The project takes broad feature inspiration from established Windows utilities s
 Run build.bat to produce the Windows executable.
 
 The goal is a clean, explainable optimizer that grows into a serious Windows management tool without becoming an unsafe "apply everything" script.
+
+
+## UI architecture
+
+The desktop shell is intentionally thin: navigation and presentation live in `app.py` and `ui/`, while Windows operations remain in `core/` and `modules/`. The Overview page separates fast telemetry from slower inventory collection so PowerShell/CIM queries do not block the interface.
+
+The dashboard refresh model is deliberately tiered:
+- CPU/GPU/RAM/system-drive telemetry: every 2 seconds, one PowerShell round-trip
+- Temperature/fan sensors: every 10 seconds, one batched query when firmware exposes them
+- BIOS, motherboard, network and driver inventory: on demand/background refresh
+
+The interface avoids an "apply everything" home screen. High-impact operations remain explicit and retain backup, confirmation, verification and administrator guards.
