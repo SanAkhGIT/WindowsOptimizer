@@ -1,0 +1,12 @@
+{
+  "7zip.7zip":{"name":"7-Zip","category":"Utilities"},
+  "Google.Chrome":{"name":"Google Chrome","category":"Browsers"},
+  "Mozilla.Firefox":{"name":"Mozilla Firefox","category":"Browsers"},
+  "VideoLAN.VLC":{"name":"VLC","category":"Media"},
+  "Notepad++.Notepad++":{"name":"Notepad++","category":"Development"},
+  "Microsoft.VisualStudioCode":{"name":"Visual Studio Code","category":"Development"},
+  "Git.Git":{"name":"Git","category":"Development"},
+  "Microsoft.PowerToys":{"name":"PowerToys","category":"Utilities"},
+  "Discord.Discord":{"name":"Discord","category":"Communication"},
+  "WinSCP.WinSCP":{"name":"WinSCP","category":"Utilities"}
+}
