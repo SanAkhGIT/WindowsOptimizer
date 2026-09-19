@@ -7,7 +7,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.jobs import JobRunner
-from modules.hardware_monitor import fans, live, temperatures
+from modules.hardware_monitor import live, sensors
 from modules.system_snapshot import snapshot
 
 
@@ -56,6 +56,7 @@ class SystemDashboard(QWidget):
         self.sensor_timer = QTimer(self)
         self.sensor_timer.timeout.connect(self._refresh_sensors)
         self.sensor_timer.start(10000)
+        QTimer.singleShot(750, self._refresh_sensors)
 
     def _build(self):
         root = QVBoxLayout(self)
@@ -186,7 +187,6 @@ class SystemDashboard(QWidget):
         free = self._gb(disk.get("FreeSpace"))
         size = self._gb(disk.get("Size"))
         self.disk_card.set_value(free, f"{size} total")
-        self._refresh_sensors()
 
     def _live_failed(self, error):
         self._live_busy = False
@@ -196,20 +196,17 @@ class SystemDashboard(QWidget):
         if self._sensor_busy:
             return
         self._sensor_busy = True
-        signals = self.jobs.submit(lambda: {"temperatures": temperatures(), "fans": fans()})
+        signals = self.jobs.submit(sensors)
         signals.finished.connect(self._sensors_done)
         signals.failed.connect(self._sensors_failed)
 
     def _sensors_done(self, data):
         self._sensor_busy = False
-        try:
-            temp = json.loads(data.get("temperatures") or "[]")
-            fan = json.loads(data.get("fans") or "[]")
-        except json.JSONDecodeError:
-            temp, fan = [], []
-
+        temp = data.get("temperatures", [])
+        fan = data.get("fans", [])
         temp_items = temp if isinstance(temp, list) else [temp]
         fan_items = fan if isinstance(fan, list) else [fan]
+
         celsius = []
         for item in temp_items:
             try:
@@ -221,10 +218,8 @@ class SystemDashboard(QWidget):
             sensor_text = f"Average thermal-zone temperature: {sum(celsius) / len(celsius):.1f} °C"
         else:
             sensor_text = "Temperature: not exposed by Windows firmware"
-        if fan_items and any(isinstance(item, dict) and item.get("Name") for item in fan_items):
-            sensor_text += f"<br>Fans detected: {sum(1 for item in fan_items if isinstance(item, dict) and item.get('Name'))}"
-        else:
-            sensor_text += "<br>Fans detected: not exposed by Windows firmware"
+        fan_count = sum(1 for item in fan_items if isinstance(item, dict) and item.get("Name"))
+        sensor_text += f"<br>Fans detected: {fan_count}" if fan_count else "<br>Fans detected: not exposed by Windows firmware"
 
         prefix = f"{self._hardware_identity}<br>" if self._hardware_identity else ""
         self.hardware.setText(prefix + sensor_text)
