@@ -1,3 +1,4 @@
+from pathlib import Path
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
     QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog,
