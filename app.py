@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog,
 )
 
 from core.backup import BackupManager
@@ -261,6 +261,14 @@ class MainWindow(QMainWindow):
         feature = QPushButton("Windows Optional Features inventory")
         feature.clicked.connect(self.show_features)
         layout.addWidget(feature)
+
+        enable_feature = QPushButton("Enable exact Windows feature")
+        enable_feature.clicked.connect(lambda: self.change_feature(True))
+        layout.addWidget(enable_feature)
+
+        disable_feature = QPushButton("Disable exact Windows feature")
+        disable_feature.clicked.connect(lambda: self.change_feature(False))
+        layout.addWidget(disable_feature)
 
         update = QPushButton("Windows Update status")
         update.clicked.connect(self.show_update_status)
@@ -530,6 +538,32 @@ class MainWindow(QMainWindow):
                 + (" | restart" if f.restart_required else "")
                 for f in features[:120]
             )
+        )
+
+    def change_feature(self, enable):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        name, accepted = QInputDialog.getText(
+            self,
+            "Windows Optional Feature",
+            "Enter the exact FeatureName returned by inventory:",
+        )
+        if not accepted or not name.strip():
+            return
+        action = "Enable" if enable else "Disable"
+        if QMessageBox.question(
+            self,
+            f"{action} feature",
+            f"{action} '{name.strip()}'? A restart may be required.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(
+            set_feature,
+            name.strip(),
+            enable,
+            done=self._show_result,
+            fail=self._show_error,
         )
 
     def show_update_status(self):
