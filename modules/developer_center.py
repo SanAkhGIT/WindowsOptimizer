@@ -22,7 +22,7 @@ $distros = (& wsl.exe --list --verbose 2>&1 | Out-String).Trim()
 $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 $dotnet = (& dotnet --info 2>&1 | Out-String).Trim()
 $git = Get-Command git.exe -ErrorAction SilentlyContinue
-$devMode = Get-ItemPropertyValue -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
+$devMode = Get-ItemPropertyValue -Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Features=$features
   SSH=$ssh
@@ -145,7 +145,7 @@ def set_developer_mode(enabled):
     value = "1" if enabled else "0"
     script = (
         "Set-ItemProperty -Path "
-        "'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' "
+        r"'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' "
         f"-Name AllowDevelopmentWithoutDevLicense -Type DWord -Value {value} -Force"
     )
     result = _command(
