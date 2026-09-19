@@ -32,6 +32,29 @@ $disk = Get-CimInstance Win32_LogicalDisk -Filter "DeviceID='$env:SystemDrive'" 
     return value if isinstance(value, dict) else {}
 
 
+def sensors():
+    script = r"""
+$temperatures = @(Get-CimInstance MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue |
+    Select-Object InstanceName,CurrentTemperature)
+$fans = @(Get-CimInstance Win32_Fan -ErrorAction SilentlyContinue |
+    Select-Object Name,Status,DesiredSpeed,ActiveCooling)
+[pscustomobject]@{
+    temperatures = $temperatures
+    fans = $fans
+} | ConvertTo-Json -Compress -Depth 4
+"""
+    value = json.loads(_powershell(script, 30))
+    return value if isinstance(value, dict) else {"temperatures": [], "fans": []}
+
+
+def _json(script, timeout=30):
+    raw = _powershell(script, timeout)
+    try:
+        return json.loads(raw or "[]")
+    except json.JSONDecodeError:
+        return []
+
+
 def cpu():
     return _powershell(
         r"Get-CimInstance Win32_Processor | Select-Object Name,NumberOfCores,NumberOfLogicalProcessors,MaxClockSpeed,CurrentClockSpeed,LoadPercentage,Manufacturer | ConvertTo-Json -Compress"
