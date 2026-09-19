@@ -30,3 +30,19 @@ The center provides direct access to environment variables and Windows Terminal 
 - no SSH configuration rewriting
 - WSL installation requires explicit confirmation
 - privileged operations require Administrator access
+
+
+## Diagnostic logging
+
+WindowsOptimizer initializes process-wide diagnostic logging when the application starts.
+
+Log location:
+`%LOCALAPPDATA%\\WindowsOptimizer\\Logs`
+
+Files:
+- `session_<id>.log` — the current application run, including startup, GUI operations, background jobs, subprocess results, registry mutations, backup activity, errors, and uncaught exceptions.
+- `application.log` — rolling longer-term history.
+
+Session logs are capped with rotation so a broken or unusually noisy operation cannot grow logs without bound. Python's `RotatingFileHandler` is used for bounded log files. The log subsystem is initialized before the GUI starts, and background-job exceptions are logged with tracebacks.
+
+Do not put passwords, API keys, or other secrets into operation arguments or diagnostic messages; diagnostic logging records operation arguments to make failures reproducible.
