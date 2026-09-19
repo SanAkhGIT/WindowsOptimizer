@@ -38,9 +38,7 @@ class DeveloperCenterPanel(QWidget):
             b=QPushButton(label); b.clicked.connect(fn); row3.addWidget(b)
         layout.addLayout(row3)
 
-        self.output_area=output
-        layout.addWidget(QLabel("Diagnostics and operation output:"))
-        layout.addWidget(output,1)
+        layout.addWidget(QLabel("Use the application operation log below for command results."))
 
     def _run(self,fn): self.run_job(fn,done=self._show,fail=self._error)
     def scan(self):
@@ -64,5 +62,5 @@ class DeveloperCenterPanel(QWidget):
         if not self.is_admin(): QMessageBox.warning(self,"Administrator required","Developer Mode requires Administrator access."); return
         action="enable" if enabled else "disable"
         if QMessageBox.question(self,"Developer Mode",f"Are you sure you want to {action} Developer Mode?") == QMessageBox.StandardButton.Yes: self._run(lambda:dev.set_developer_mode(enabled))
-    def _show(self,value): self.output_area.setPlainText(str(value))
-    def _error(self,error): self.output_area.setPlainText(f"Operation failed:\n{error}")
+    def _show(self,value): self.output.setPlainText(str(value))
+    def _error(self,error): self.output.setPlainText(f"Operation failed:\n{error}")
