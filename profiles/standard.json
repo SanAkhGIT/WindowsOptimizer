@@ -1,6 +1,6 @@
 {
   "name": "Standard",
-  "description": "Balanced Windows 11 baseline with conservative privacy and UI controls.",
+  "description": "Balanced Windows 11 baseline with conservative privacy, UI and debloat controls.",
   "tweaks": [
     "taskbar_left",
     "transparency_off",
@@ -8,6 +8,7 @@
     "activity_history_off",
     "tailored_experiences_off",
     "taskbar_end_task",
+    "widgets_off",
     "game_mode",
     "advertising_id_off"
   ]
