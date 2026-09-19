@@ -212,11 +212,11 @@ def _powershell_json(script: str) -> dict | list:
 
 def windows_management_health() -> MaintenanceResult:
     data = _powershell_json(
-        """
+        r"""
         $startup = @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue)
         $services = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue)
         $reboot = @(
-            Test-Path r'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+            Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
             Test-Path r'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
         ) -contains $true
         [pscustomobject]@{
