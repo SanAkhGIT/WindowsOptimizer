@@ -23,6 +23,57 @@ def _json_query(script, timeout=30):
         return []
 
 
+def _normalise_list(value):
+    if value is None:
+        return []
+    if isinstance(value, list):
+        return value
+    return [value]
+
+
+def _extract_address(value):
+    """Return a readable IP address from PowerShell/CIM wrapper objects."""
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, dict):
+        for key in ("IPAddress", "Address", "Value", "Name"):
+            candidate = value.get(key)
+            if isinstance(candidate, str) and candidate.strip():
+                return candidate.strip()
+    return ""
+
+
+def _addresses(value):
+    result = []
+    for item in _normalise_list(value):
+        address = _extract_address(item)
+        if address and address not in result:
+            result.append(address)
+    return result
+
+
+def _network_records(items):
+    records = []
+    for item in _normalise_list(items):
+        if not isinstance(item, dict):
+            continue
+        interface = str(item.get("InterfaceAlias") or "Network adapter").strip()
+        description = str(item.get("InterfaceDescription") or "").strip()
+        ipv4 = _addresses(item.get("IPv4Address"))
+        ipv6 = _addresses(item.get("IPv6Address"))
+        dns = _addresses(item.get("DNSServer"))
+        records.append(
+            {
+                "InterfaceAlias": interface,
+                "InterfaceDescription": description,
+                "IPv4Address": ipv4,
+                "IPv6Address": ipv6,
+                "DNSServer": dns,
+            }
+        )
+    return records
+
+
 def snapshot():
     """Collect slower-changing system inventory in one PowerShell process."""
     script = r"""
@@ -51,7 +102,7 @@ $chassis = @(Get-CimInstance Win32_SystemEnclosure | Select-Object -Expand Chass
     gpu = $gpu.Name
     disk = $disk.MediaType
     chassis = $chassis
-} | ConvertTo-Json -Compress -Depth 6
+} | ConvertTo-Json -Compress -Depth 8
 """
     data = _json_query(script, 60)
     payload = data[0] if data else {}
@@ -77,7 +128,7 @@ $chassis = @(Get-CimInstance Win32_SystemEnclosure | Select-Object -Expand Chass
         "system": system,
         "hostname": socket.gethostname(),
         "platform": platform.platform(),
-        "network": payload.get("network", []),
+        "network": _network_records(payload.get("network", [])),
         "os_hotfixes": payload.get("hotfixes", []),
         "bios": payload.get("bios", []),
         "motherboard": payload.get("motherboard", []),
