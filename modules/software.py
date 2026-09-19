@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from typing import Iterable
+import re
 from core.process import run_executable
 
 @dataclass(frozen=True)
@@ -48,6 +49,78 @@ CATALOG = [
     AppSpec("AppWork.JDownloader","JDownloader 2","Utilities","Download manager with queueing and archive extraction."),
     AppSpec("9N9WCLWDQS5J","Bluetooth Audio Receiver","Music","Receive Bluetooth audio from paired devices on Windows.",source="msstore"),
 ]
+
+
+@dataclass(frozen=True)
+class UpdateReport:
+    available: int
+    updated: int = 0
+    remaining: int = 0
+    attempted: int = 0
+    output: str = ""
+
+    @property
+    def failed(self) -> int:
+        return max(0, self.attempted - self.updated)
+
+    @property
+    def clean(self) -> bool:
+        return self.remaining == 0
+
+
+def parse_upgrade_count(output: str) -> int:
+    """Extract the number of available upgrades from WinGet text output."""
+    text = output or ""
+    patterns = (
+        r"(?im)^\\s*(\\d+)\\s+upgrade(?:s)?\\s+available\\.?\\s*$",
+        r"(?im)^\\s*(\\d+)\\s+package(?:s)?\\s+have\\s+upgrade(?:s)?\\s+available\\.?\\s*$",
+    )
+    for pattern in patterns:
+        match = re.search(pattern, text)
+        if match:
+            return int(match.group(1))
+
+    catalog_ids = {app.id.lower() for app in CATALOG}
+    found = {
+        package_id
+        for package_id in catalog_ids
+        if re.search(rf"(?i)(?<![A-Za-z0-9_.-]){re.escape(package_id)}(?![A-Za-z0-9_.-])", text)
+    }
+    return len(found)
+
+
+def upgrade_report() -> UpdateReport:
+    """Scan for upgrades and return a structured count for the UI."""
+    output = upgrade_available()
+    available = parse_upgrade_count(output)
+    return UpdateReport(available=available, attempted=available, remaining=available, output=output)
+
+
+def upgrade_all_report() -> UpdateReport:
+    """Upgrade all available packages and verify the remaining count."""
+    before = upgrade_report()
+    if before.available == 0:
+        return before
+
+    output, code = _winget(
+        [
+            "upgrade", "--all", "--accept-package-agreements",
+            "--accept-source-agreements", "--disable-interactivity",
+        ],
+        600,
+    )
+    if code and "No applicable upgrade found" not in output:
+        raise RuntimeError(output or "WinGet upgrade failed.")
+
+    after = upgrade_report()
+    updated = max(0, before.available - after.available)
+    return UpdateReport(
+        available=before.available,
+        updated=updated,
+        remaining=after.available,
+        attempted=before.available,
+        output=output or "No applicable upgrades found.",
+    )
 
 def _winget(args: list[str], timeout: int = 180):
     result = run_executable("winget", args, timeout)
