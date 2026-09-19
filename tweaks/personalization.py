@@ -1,22 +1,12 @@
 from pathlib import Path
 from PIL import Image
-
-ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "generated"
-
-def _black_image(name, size=(3840, 2160)):
-    ASSET_DIR.mkdir(parents=True, exist_ok=True)
-    path = ASSET_DIR / name
-    if not path.exists():
-        Image.new("RGB", size, (0, 0, 0)).save(path, "PNG")
-    return path
-
-def scan_personalization():
-    wallpaper = _black_image("black-desktop.png")
-    lock = _black_image("black-lockscreen.png")
-    return [
-        {"id":"black_wallpaper","name":"Pure black desktop wallpaper","description":f"Uses an application-generated #000000 wallpaper: {wallpaper.name}","risk":"SAFE","recommended":True,"path":str(wallpaper)},
-        {"id":"black_lockscreen","name":"Pure black lock screen asset","description":"Generates a black lock-screen image; application will only apply supported Windows mechanisms.","risk":"SAFE","recommended":True,"path":str(lock)},
-    ]
-
-def apply_personalization(tweak):
-    pass
+from core.models import Tweak
+import ctypes,winreg
+ASSET_DIR=Path(__file__).resolve().parent.parent/"assets"/"generated"
+def black():
+ ASSET_DIR.mkdir(parents=True,exist_ok=True); p=ASSET_DIR/"black-desktop.png"
+ if not p.exists(): Image.new("RGB",(3840,2160),(0,0,0)).save(p,"PNG")
+ return p
+def apply():
+ p=black(); k=winreg.CreateKey(winreg.HKEY_CURRENT_USER,r"Control Panel\Desktop"); winreg.SetValueEx(k,"WallPaper",0,winreg.REG_SZ,str(p)); winreg.CloseKey(k); ctypes.windll.user32.SystemParametersInfoW(20,0,str(p),3); return "Desktop wallpaper set to pure black."
+def scan_personalization(): return [Tweak("black_wallpaper","Pure black desktop wallpaper","UI","Use an application-generated #000000 wallpaper.","SAFE",False,True,False,"None",None,apply,metadata={"path":str(black())})]
