@@ -17,10 +17,11 @@ from modules.appx import AppxPackage, inventory, register_existing_manifest, rem
 
 
 class AppxPanel(QWidget):
-    def __init__(self, output, run_job):
+    def __init__(self, output, run_job, open_system_debloat=None):
         super().__init__()
         self.output = output
         self.run_job = run_job
+        self.open_system_debloat = open_system_debloat
         self.packages = []
         self._build()
 
@@ -39,6 +40,21 @@ class AppxPanel(QWidget):
         description.setObjectName("muted")
         description.setWordWrap(True)
         layout.addWidget(description)
+
+        system_card = QHBoxLayout()
+        system_label = QLabel(
+            "System debloat: reversible privacy/UI policies such as Widgets and "
+            "consumer-content controls are managed separately from AppX removal."
+        )
+        system_label.setObjectName("muted")
+        system_label.setWordWrap(True)
+        system_card.addWidget(system_label, 1)
+        if self.open_system_debloat:
+            system_button = QPushButton("System debloat tweaks")
+            system_button.setToolTip("Open the reversible system debloat controls in Optimize.")
+            system_button.clicked.connect(self.open_system_debloat)
+            system_card.addWidget(system_button)
+        layout.addLayout(system_card)
 
         controls = QHBoxLayout()
         self.search = QLineEdit()
