@@ -8,6 +8,7 @@ or changes power settings by itself.
 from datetime import datetime, timezone
 import json
 from pathlib import Path
+from core.process import run_executable
 
 SCHEMA_VERSION = 1
 
@@ -64,3 +65,16 @@ def diff(data, tweak_ids, package_ids=()):
         "apps_to_select": sorted(wanted_apps - current_apps),
         "apps_to_clear": sorted(current_apps - wanted_apps),
     }
+
+
+def export_winget(path):
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    result = run_executable(
+        "winget",
+        ("export", "--output", str(path), "--accept-source-agreements"),
+        300,
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr or result.stdout or "WinGet export failed.")
+    return path
