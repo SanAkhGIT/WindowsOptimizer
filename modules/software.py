@@ -73,8 +73,8 @@ def parse_upgrade_count(output: str) -> int:
     """Extract the number of available upgrades from WinGet text output."""
     text = output or ""
     patterns = (
-        r"(?im)^\\s*(\\d+)\\s+upgrade(?:s)?\\s+available\\.?\\s*$",
-        r"(?im)^\\s*(\\d+)\\s+package(?:s)?\\s+have\\s+upgrade(?:s)?\\s+available\\.?\\s*$",
+        r"(?im)^\s*(\d+)\s+upgrade(?:s)?\s+available\.?\s*$",
+        r"(?im)^\s*(\d+)\s+package(?:s)?\s+have\s+upgrade(?:s)?\s+available\.?\s*$",
     )
     for pattern in patterns:
         match = re.search(pattern, text)
