@@ -1,9 +1,10 @@
 import ctypes
 import json
 import platform
-import subprocess
 
 import psutil
+
+from core.process import run_executable
 
 
 _LAPTOP_CHASSIS = {"8", "9", "10", "11", "12", "14", "18", "21", "30", "31", "32"}
@@ -29,9 +30,10 @@ $chassis = @(Get-CimInstance Win32_SystemEnclosure | Select-Object -Expand Chass
     chassis = $chassis
 } | ConvertTo-Json -Compress
 """
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
+    result = run_executable(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", script],
+        timeout=20,
     )
     if result.returncode:
         return {}
