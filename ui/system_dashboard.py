@@ -110,6 +110,7 @@ class SystemDashboard(QWidget):
         nl.addWidget(heading)
         self.network = QLabel("Loading…")
         self.network.setWordWrap(True)
+        self.network.setTextInteractionFlags(self.network.textInteractionFlags())
         nl.addWidget(self.network)
         details.addWidget(network, 1)
         root.addLayout(details)
@@ -157,6 +158,15 @@ class SystemDashboard(QWidget):
             return f"{float(value) / 1024**3:.1f} GB"
         except (TypeError, ValueError):
             return "—"
+
+    @staticmethod
+    def _values(value):
+        if value is None:
+            return []
+        if isinstance(value, list):
+            return [str(item).strip() for item in value if str(item).strip()]
+        text = str(value).strip()
+        return [text] if text else []
 
     def _refresh_live(self):
         if self._live_busy:
@@ -252,13 +262,19 @@ class SystemDashboard(QWidget):
         if adapters:
             rows = []
             for item in adapters[:4]:
-                rows.append(
-                    f"{item.get('InterfaceAlias', 'Adapter')}: "
-                    f"{item.get('IPv4Address') or 'No IPv4'} • DNS {item.get('DNSServer') or '—'}"
-                )
+                name = item.get("InterfaceAlias") or "Network adapter"
+                addresses = self._values(item.get("IPv4Address"))
+                dns = self._values(item.get("DNSServer"))
+                ipv6 = self._values(item.get("IPv6Address"))
+                address_text = ", ".join(addresses) if addresses else "No IPv4"
+                dns_text = ", ".join(dns) if dns else "—"
+                row = f"<b>{name}</b>: {address_text} • DNS {dns_text}"
+                if ipv6:
+                    row += f"<br><small>IPv6: {', '.join(ipv6[:2])}</small>"
+                rows.append(row)
             self.network.setText("<br>".join(rows))
         else:
-            self.network.setText("No network configuration was returned.")
+            self.network.setText("No active network configuration was returned.")
 
         bios = self._first(data.get("bios"))
         board = self._first(data.get("motherboard"))
