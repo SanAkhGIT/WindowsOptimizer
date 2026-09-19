@@ -53,9 +53,9 @@ def classify(entry):
 
     if "STARTUP" in location_upper:
         source = "Startup folder"
-    elif "\RUNONCE" in location_upper:
+    elif r"\RUNONCE" in location_upper:
         source = "Registry RunOnce"
-    elif "\RUN" in location_upper:
+    elif r"\RUN" in location_upper:
         source = "Registry Run"
     else:
         source = "Other"
