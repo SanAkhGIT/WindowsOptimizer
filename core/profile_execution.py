@@ -68,7 +68,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
                     "APPLIED" if verified is None else "UNVERIFIED"
                 )
                 rollback_keys = tuple(getattr(tweak, "metadata", {}).get("rollback_keys", ()))
-                rollback_supported = bool(tweak.rollback) or bool(backup_path and rollback_keys and tweak.check)
+                rollback_supported = bool(getattr(tweak, "rollback", None)) or bool(backup_path and rollback_keys and getattr(tweak, "check", None))
             elif item.kind == "app" and item.action == "install":
                 if item.identifier not in catalog:
                     raise ValueError(f"Unknown catalog application: {item.identifier}")
