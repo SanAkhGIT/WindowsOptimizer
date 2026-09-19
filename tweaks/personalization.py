@@ -1,12 +1,13 @@
 from pathlib import Path
 import ctypes
+import os
 import winreg
 
 from PIL import Image
 from core.models import Tweak
 from core.registry import read_value
 
-ASSET_DIR = Path(__file__).resolve().parent.parent / "assets" / "generated"
+ASSET_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "WindowsOptimizer" / "Assets"
 WALLPAPER_KEY = r"Control Panel\Desktop"
 
 
