@@ -1,42 +1,100 @@
 # Windows Optimizer
 
-A Windows 11 post-install optimizer built around a safe scan/preview/apply workflow.
+WindowsOptimizer is a Windows 11 optimization and maintenance suite built around:
 
-## Current foundation
+**Discover → Review → Backup → Apply → Verify → Recover**
 
-- PySide6 GUI
-- Windows/system information detection
+It is being designed as a long-lived local Windows utility rather than a collection of one-off registry scripts.
+
+## What is implemented
+
+- PySide6 desktop GUI with category-based operation views
+- Windows build, CPU, GPU, RAM, disk and laptop/desktop discovery
 - Administrator detection
-- Registry backup snapshots
-- Left taskbar alignment
-- Transparency reduction
-- Generated pure-black desktop and lock-screen assets
-- Modular tweak architecture
-- PyInstaller build support
+- Registry snapshots before changes
+- Windows System Restore point integration
+- Operation execution and machine-readable logs
+- Risk/reversibility/restart metadata for each operation
+- Taskbar left alignment
+- Transparency control
+- Pure-black wallpaper
+- Windows Game Mode control
+- Optional Game DVR capture disable
+- Advertising ID privacy control
+- DNS maintenance
+- Explorer restart repair action
+- WinGet installed-software inventory
+- Minimal / Standard / Gaming / Performance profiles
+- Modular catalog architecture
 
-## Safety model
+## Design rules
 
-The intended architecture is:
+1. Do not blindly apply every tweak.
+2. Do not disable Defender, security software, Windows Update, core services or networking in default profiles.
+3. Prefer supported Windows settings over undocumented registry hacks.
+4. Every behavior-changing operation must explain its trade-off.
+5. Performance claims should eventually be backed by measurements.
+6. Debloat must be selective and reversible, not a destructive package purge.
+7. The GUI is only a shell; Windows operations live in testable modules.
 
-Scan -> Preview -> Backup -> Apply -> Verify -> Rollback
+## Feature direction
 
-This repository is deliberately conservative at this stage. Each future Windows tweak should be individually tested and documented for supported Windows builds before being enabled by default.
+The project takes feature inspiration from established utilities such as Chris Titus Tech's WinUtil and the archived Windows Powertool. WinUtil currently covers application installation, tweaks, fixes, updates and presets, while Windows Powertool documents optimization, debloat and restore workflows. WindowsOptimizer is intentionally implementing its own architecture rather than executing their remote scripts.
+
+## Roadmap
+
+### Phase 1 — Engine
+- [x] System discovery
+- [x] Operation catalog
+- [x] Backup
+- [x] Restore point
+- [x] Apply executor
+- [x] Operation logging
+- [ ] Per-operation verification
+- [ ] Per-operation rollback
+
+### Phase 2 — Windows management
+- [ ] Startup manager with impact analysis
+- [ ] Services analyzer with safe recommendations
+- [ ] Power-plan manager
+- [ ] Network adapter analyzer
+- [ ] Before/after latency and throughput checks
+- [ ] Windows Update center
+- [ ] Repair center: DISM, SFC, Store, Search, Update
+
+### Phase 3 — Software
+- [x] WinGet inventory
+- [ ] Software install/update UI
+- [ ] Software uninstall UI
+- [ ] Curated application catalog
+- [ ] Selective debloat
+- [ ] Reinstall/restore paths for removable packages
+
+### Phase 4 — Gaming
+- [x] Game Mode
+- [x] Optional Game DVR control
+- [ ] Gaming profile based on detected hardware
+- [ ] Background-process analysis
+- [ ] Power/GPU/network recommendations
+- [ ] Benchmark mode so changes can be measured
+
+### Phase 5 — Profiles & automation
+- [x] JSON profile foundation
+- [ ] Import/export profiles
+- [ ] Dry-run / preview mode
+- [ ] Apply report
+- [ ] Scheduled maintenance
+- [ ] Offline-first operation
+- [ ] Signed releases
 
 ## Run
 
-```powershell
+PowerShell:
 py -m pip install -r requirements.txt
 py main.py
-```
 
 ## Build
 
-Run `build.bat` to create:
+Run build.bat to produce the Windows executable.
 
-```text
-dist\WindowsOptimizer.exe
-```
-
-## Development notes
-
-See `docs/tweaks.md` for the tweak documentation requirements.
+The goal is a clean, explainable optimizer that can grow into a serious Windows management tool without turning into an unsafe "apply everything" script.

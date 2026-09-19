@@ -1,0 +1,1 @@
+{"name":"Performance","description":"Measured performance baseline without disabling core Windows security or services.","tweaks":["transparency_off","game_mode"]}
