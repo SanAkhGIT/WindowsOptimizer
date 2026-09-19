@@ -20,8 +20,7 @@ def _ps(script, timeout=90):
 
 
 def _valid(name):
-    return bool(name) and not any(c in name for c in "
-;&|")
+    return bool(name) and not any(c in name for c in "\r\n;&|")
 
 
 def inventory():
@@ -76,10 +75,20 @@ def _save_backup(data):
     )
 
 
+def _set_start_mode(name, mode):
+    safe = name.replace("'", "''")
+    filter_expr = f"Name='{safe}'"
+    script = (
+        f"Set-Service -Name '{safe}' -StartupType {mode}; "
+        f"Get-CimInstance Win32_Service -Filter \"{filter_expr}\" | "
+        "Select-Object Name,StartMode,State | ConvertTo-Json -Compress"
+    )
+    return _ps(script)
+
+
 def set_start_mode(name, mode):
     if mode not in {"Automatic", "Manual", "Disabled"} or not _valid(name):
         raise ValueError("Invalid service name or startup mode.")
-    safe = name.replace("'", "''")
     current = json.loads(details(name))
     data = _load_backup()
     data.setdefault(
@@ -92,13 +101,7 @@ def set_start_mode(name, mode):
     )
     _save_backup(data)
 
-    filter_expr = f"Name='{safe}'"
-    script = (
-        f"Set-Service -Name '{safe}' -StartupType {mode}; "
-        f"Get-CimInstance Win32_Service -Filter \"{filter_expr}\" | "
-        "Select-Object Name,StartMode,State | ConvertTo-Json -Compress"
-    )
-    result = _ps(script)
+    result = _set_start_mode(name, mode)
     if result.returncode:
         raise RuntimeError(result.stderr or "Service startup mode change failed.")
     return result.stdout or f"Service '{name}' set to {mode}."
@@ -114,14 +117,8 @@ def restore_start_mode(name):
         "Manual": "Manual",
         "Disabled": "Disabled",
     }.get(item["original_start_mode"], item["original_start_mode"])
-    safe = name.replace("'", "''")
-    filter_expr = f"Name='{safe}'"
-    script = (
-        f"Set-Service -Name '{safe}' -StartupType {mode}; "
-        f"Get-CimInstance Win32_Service -Filter \"{filter_expr}\" | "
-        "Select-Object Name,StartMode,State | ConvertTo-Json -Compress"
-    )
-    result = _ps(script)
+
+    result = _set_start_mode(name, mode)
     if result.returncode:
         raise RuntimeError(result.stderr or "Service restore failed.")
     data.pop(name, None)
