@@ -29,6 +29,7 @@ class ReceiptItem:
     status: str
     message: str = ""
     verification: str = ""
+    rollback_supported: bool = False
 
 
 @dataclass(frozen=True)
@@ -58,7 +59,7 @@ def new_receipt(source, profile_id=None, profile_version=None, backup_path=None)
 
 def complete(receipt, items):
     items = tuple(items)
-    if any(item.status == "FAILED" for item in items):
+    if any(item.status in {"FAILED", "ROLLBACK_FAILED"} for item in items):
         status = "FAILED"
     elif any(item.status in {"UNVERIFIED", "APPLIED"} for item in items):
         status = "COMPLETED_WITH_WARNINGS"
