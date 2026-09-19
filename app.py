@@ -24,7 +24,7 @@ from modules.network_center import (
 from modules.power import current as power_current, plans as power_plans, set_high_performance
 from modules.repair import dism, explorer, sfc
 from modules.services import inventory as services_inventory
-from modules.software import installed_apps, upgrade_all
+from modules.software import installed_apps, upgrade_all, upgrade_report, upgrade_all_report
 from modules.startup import inventory as startup_inventory
 from modules.windows_features import inventory as feature_inventory, set_feature
 from modules.windows_update import (
@@ -264,15 +264,38 @@ class MainWindow(QMainWindow):
         layout.addWidget(label)
 
         software = QGroupBox("Software updates")
-        software_layout = QHBoxLayout(software)
-        scan = QPushButton("Check WinGet upgrades")
+        software_layout = QVBoxLayout(software)
+
+        summary_row = QHBoxLayout()
+        self.update_available_value = QLabel("—")
+        self.update_available_value.setObjectName("updateValue")
+        self.update_available_hint = QLabel("Not checked")
+        self.update_available_hint.setObjectName("muted")
+        summary_row.addWidget(self._update_stat("Updates available", self.update_available_value, self.update_available_hint))
+
+        self.update_updated_value = QLabel("—")
+        self.update_updated_value.setObjectName("updateValue")
+        self.update_updated_hint = QLabel("This run")
+        self.update_updated_hint.setObjectName("muted")
+        summary_row.addWidget(self._update_stat("Updated", self.update_updated_value, self.update_updated_hint))
+
+        self.update_remaining_value = QLabel("—")
+        self.update_remaining_value.setObjectName("updateValue")
+        self.update_remaining_hint = QLabel("After upgrade")
+        self.update_remaining_hint.setObjectName("muted")
+        summary_row.addWidget(self._update_stat("Remaining", self.update_remaining_value, self.update_remaining_hint))
+        software_layout.addLayout(summary_row)
+
+        actions = QHBoxLayout()
+        scan = QPushButton("Check for updates")
         scan.clicked.connect(self.check_updates)
-        software_layout.addWidget(scan)
+        actions.addWidget(scan)
         upgrade = QPushButton("Upgrade all")
         upgrade.setObjectName("primary")
         upgrade.clicked.connect(self.upgrade_software)
-        software_layout.addWidget(upgrade)
-        software_layout.addStretch()
+        actions.addWidget(upgrade)
+        actions.addStretch()
+        software_layout.addLayout(actions)
         layout.addWidget(software)
 
         windows = QGroupBox("Windows Update policy")
@@ -326,6 +349,19 @@ class MainWindow(QMainWindow):
         layout.addWidget(repair)
         layout.addStretch()
         self.stack.addWidget(page)
+
+    @staticmethod
+    def _update_stat(title, value_label, hint_label):
+        card = QFrame()
+        card.setObjectName("updateStat")
+        card_layout = QVBoxLayout(card)
+        card_layout.setContentsMargins(12, 9, 12, 9)
+        title_label = QLabel(title.upper())
+        title_label.setObjectName("muted")
+        card_layout.addWidget(title_label)
+        card_layout.addWidget(value_label)
+        card_layout.addWidget(hint_label)
+        return card
 
     def _build_windows_page(self):
         page = QWidget()
@@ -898,15 +934,45 @@ class MainWindow(QMainWindow):
 
     def upgrade_software(self):
         self._run_job(
-            upgrade_all,
-            done=self._show_result,
+            upgrade_all_report,
+            done=self._show_upgrade_report,
             fail=self._show_error,
             label="Upgrade all • WinGet (may take several minutes)",
         )
 
     def check_updates(self):
-        from modules.software import upgrade_available
-        self._run_job(upgrade_available, done=self._show_result, fail=self._show_error)
+        self._run_job(
+            upgrade_report,
+            done=self._show_update_report,
+            fail=self._show_error,
+            label="Checking installed apps for updates",
+        )
+
+    def _show_update_report(self, report):
+        self.update_available_value.setText(str(report.available))
+        self.update_available_hint.setText("apps need an update" if report.available != 1 else "app needs an update")
+        self.update_updated_value.setText("—")
+        self.update_updated_hint.setText("Run Upgrade all to update")
+        self.update_remaining_value.setText(str(report.remaining))
+        self.update_remaining_hint.setText("currently available")
+        self.output.setPlainText(report.output or "No upgrades available.")
+        self.activity.append(
+            f"UPDATES  {report.available} app(s) need an update"
+        )
+
+    def _show_upgrade_report(self, report):
+        self.update_available_value.setText(str(report.available))
+        self.update_available_hint.setText("found before upgrade")
+        self.update_updated_value.setText(str(report.updated))
+        self.update_updated_hint.setText("updated successfully" if report.updated != 1 else "updated successfully")
+        self.update_remaining_value.setText(str(report.remaining))
+        self.update_remaining_hint.setText(
+            "All clear" if report.remaining == 0 else "still need attention"
+        )
+        self.output.setPlainText(report.output or "WinGet completed.")
+        self.activity.append(
+            f"UPGRADE  {report.updated} updated • {report.remaining} remaining"
+        )
 
     def repair_explorer(self):
         self._run_job(explorer, done=self._show_result, fail=self._show_error)
