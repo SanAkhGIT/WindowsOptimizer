@@ -10,15 +10,27 @@ POWERSHELL = "powershell.exe"
 # These are only recommendation hints. Removal is always exact-package based
 # and the UI never performs wildcard deletion.
 RECOMMENDED_NAMES = (
+    # Conservative recommendation set inspired by common Windows debloat
+    # candidates. These are only UI recommendations; removal still requires
+    # explicit row selection and exact PackageFullName values.
     "3DViewer",
     "BingNews",
     "BingWeather",
+    "BingSearch",
     "Clipchamp",
     "DevHome",
     "FeedbackHub",
     "GetHelp",
     "Getstarted",
+    "Microsoft.MicrosoftOfficeHub",
     "Microsoft.MicrosoftSolitaireCollection",
+    "Microsoft.WindowsAlarms",
+    "Microsoft.WindowsSoundRecorder",
+    "Microsoft.WindowsFeedbackHub",
+    "Microsoft.Todos",
+    "Microsoft.PowerAutomateDesktop",
+    "Microsoft.StartExperiencesApp",
+    "Microsoft.Copilot",
     "MicrosoftTeams",
     "MSTeams",
     "PowerAutomate",
