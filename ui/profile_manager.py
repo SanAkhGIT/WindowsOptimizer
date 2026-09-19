@@ -7,6 +7,7 @@ from core.profile_manager import (
     build_plan, delete_profile, format_plan, list_profiles, save_profile,
 )
 from core.configuration import build
+from core.operation_receipts import recent
 
 
 class ProfileManagerDialog(QDialog):
@@ -40,6 +41,7 @@ class ProfileManagerDialog(QDialog):
             ("Save Current", self.save_current),
             ("Load Selected", self.load_selected),
             ("Review Plan", self.review_plan),
+            ("Receipts", self.show_receipts),
             ("Delete Custom", self.delete_selected),
             ("Close", self.close),
         ):
@@ -120,6 +122,19 @@ class ProfileManagerDialog(QDialog):
         state = self.get_state()
         plan = build_plan(profile, state["tweaks"], state["apps"], state["features"])
         self.details.setPlainText(format_plan(plan))
+
+    def show_receipts(self):
+        entries = recent(limit=12)
+        if not entries:
+            self.details.setPlainText("No execution receipts recorded yet.")
+            return
+        lines = ["RECENT EXECUTION RECEIPTS", ""]
+        for path, receipt in entries:
+            lines.append(
+                f"{receipt.created_utc} | {receipt.status} | "
+                f"{receipt.profile_id or 'manual'} | {len(receipt.items)} item(s) | {path.name}"
+            )
+        self.details.setPlainText("\n".join(lines))
 
     def delete_selected(self):
         profile = self._selected()
