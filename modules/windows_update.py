@@ -74,16 +74,25 @@ def _delete_policy_value(name):
     delete_value(winreg.HKEY_LOCAL_MACHINE, POLICY, name)
 
 
-def pause_quality():
+def _write_pause_start(name):
     _ensure_admin()
-    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseQualityUpdatesStartTime", 1)
-    return "Quality updates pause policy enabled; Windows documents a maximum 35-day pause window."
+    # Windows Update stores these pause-start settings as timestamp strings,
+    # not DWORD flags. Use the current local timestamp in the documented format.
+    import datetime
+    stamp = datetime.datetime.now().astimezone().strftime("%Y-%m-%dT%H:%M:%SZ")
+    write_string(winreg.HKEY_LOCAL_MACHINE, POLICY, name, stamp)
+    return stamp
+
+
+def pause_quality():
+    stamp = _write_pause_start("PauseQualityUpdatesStartTime")
+    return f"Quality updates pause policy start recorded at {stamp}; Windows documents a maximum 35-day pause window."
+
 
 
 def pause_feature():
-    _ensure_admin()
-    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseFeatureUpdatesStartTime", 1)
-    return "Feature updates pause policy enabled; Windows documents a maximum 35-day pause window."
+    stamp = _write_pause_start("PauseFeatureUpdatesStartTime")
+    return f"Feature updates pause policy start recorded at {stamp}; Windows documents a maximum 35-day pause window."
 
 
 def resume_quality():
