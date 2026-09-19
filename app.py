@@ -11,6 +11,7 @@ from core.profiles import load_profiles
 from core.configuration import build as build_configuration, save as save_configuration, load as load_configuration, export_winget
 from core.configuration_engine import compare as compare_configuration, summary as configuration_summary
 from core.restore import create_restore_point
+from core.profile_execution import execute_approved_plan
 from core.system_info import is_admin
 from modules.catalog import all_tweaks
 from modules.network_center import (
@@ -404,8 +405,52 @@ class MainWindow(QMainWindow):
                 "Use the explicit Apply configuration action when you are ready."
             )
 
-        dialog = ProfileManagerDialog(self, lambda: state, apply_profile)
+        def execute_profile(profile, selected_items):
+            if self._busy:
+                return
+            if not is_admin():
+                QMessageBox.warning(
+                    self,
+                    "Administrator required",
+                    "Run Windows Optimizer as Administrator before executing approved profile operations.",
+                )
+                return
+
+            self.output.setPlainText(
+                f"APPROVED PROFILE EXECUTION\\n"
+                f"{profile.name} v{profile.version}\\n"
+                f"Executing {len(selected_items)} approved operation(s)..."
+            )
+            self._run_job(
+                execute_approved_plan,
+                profile,
+                selected_items,
+                done=self._show_profile_execution,
+                fail=self._show_error,
+            )
+
+        dialog = ProfileManagerDialog(
+            self,
+            lambda: state,
+            apply_profile,
+            execute_profile,
+        )
         dialog.exec()
+
+    def _show_profile_execution(self, result):
+        lines = [
+            "PROFILE EXECUTION COMPLETE",
+            f"Status: {result.status}",
+            f"Backup: {result.backup_path or 'Not created'}",
+            f"Receipt: {result.receipt_path}",
+            "",
+        ]
+        lines.extend(
+            f"{item.identifier}: {item.status} — {item.message} — {item.verification}"
+            for item in result.items
+        )
+        self.output.setPlainText("\\n".join(lines))
+        self.refresh()
 
     def create_backup(self):
         try:
