@@ -3,34 +3,31 @@
 from __future__ import annotations
 
 import os
-import subprocess
 import sys
 from pathlib import Path
+
+from core.process import run_executable
 
 TASK_NAME = "WindowsOptimizer - Daily Maintenance"
 DEFAULT_TIME = "03:00"
 
 
 def _run_powershell(script: str) -> str:
-    result = subprocess.run(
-        [
-            "powershell.exe",
+    result = run_executable(
+        "powershell.exe",
+        (
             "-NoProfile",
             "-NonInteractive",
             "-ExecutionPolicy",
             "Bypass",
             "-Command",
             script,
-        ],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+        ),
         timeout=30,
     )
     if result.returncode:
-        raise RuntimeError(result.stderr.strip() or result.stdout.strip() or "PowerShell failed.")
-    return result.stdout.strip()
+        raise RuntimeError(result.stderr or result.stdout or "PowerShell failed.")
+    return result.stdout
 
 
 def _task_action() -> tuple[str, str]:
