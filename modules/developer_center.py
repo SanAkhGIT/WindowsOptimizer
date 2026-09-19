@@ -22,7 +22,7 @@ $distros = (& wsl.exe --list --verbose 2>&1 | Out-String).Trim()
 $pwsh = Get-Command pwsh.exe -ErrorAction SilentlyContinue
 $dotnet = (& dotnet --info 2>&1 | Out-String).Trim()
 $git = Get-Command git.exe -ErrorAction SilentlyContinue
-$devMode = Get-ItemPropertyValue -Path 'HKLM:SOFTWAREMicrosoftWindowsCurrentVersionAppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
+$devMode = Get-ItemPropertyValue -Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\AppModelUnlock' -Name AllowDevelopmentWithoutDevLicense -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Features=$features
   SSH=$ssh
@@ -75,12 +75,16 @@ def wsl_status():
 
 def wsl_distros():
     result = _command("wsl.exe", ("--list", "--verbose"), 60)
-    return result.stdout or result.stderr or "No WSL distributions found."
+    if result.returncode:
+        raise RuntimeError(result.stderr or result.stdout or "WSL distribution query failed.")
+    return result.stdout or "No WSL distributions found."
 
 
 def install_wsl():
     result = _command("wsl.exe", ("--install", "--no-launch"), 300)
-    return result.stdout or result.stderr or "WSL installation command completed."
+    if result.returncode:
+        raise RuntimeError(result.stderr or result.stdout or "WSL installation failed.")
+    return result.stdout or "WSL installation command completed."
 
 
 def ssh_status():
