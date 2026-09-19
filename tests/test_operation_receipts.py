@@ -29,3 +29,38 @@ def test_receipt_failure_state():
         ReceiptItem("feature", "x", "enable", "FAILED"),
     ])
     assert finished.status == "FAILED"
+
+
+
+def test_manual_executor_receipt_records_backup_and_rollback(monkeypatch, tmp_path):
+    from types import SimpleNamespace
+
+    from core.executor import Executor
+    from core.operation_receipts import recent
+
+    tweak = SimpleNamespace(
+        id="demo",
+        name="Demo",
+        apply=lambda: "changed",
+        check=lambda: True,
+        rollback=None,
+        metadata={
+            "rollback_keys": (
+                {"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"},
+            )
+        },
+    )
+    monkeypatch.setattr("core.executor.verify_tweak", lambda item: (True, "verified"))
+
+    log_dir = tmp_path / "logs"
+    backup_path = tmp_path / "backup"
+    backup_path.mkdir()
+    results = Executor(log_dir=log_dir).apply([tweak], backup_path=backup_path)
+
+    assert results[0].status == "VERIFIED"
+    entries = recent(tmp_path, limit=5)
+    assert entries
+    _, receipt = entries[0]
+    assert receipt.backup_path == str(backup_path)
+    assert receipt.items[0].rollback_supported is True
+    assert receipt.items[0].rollback_keys[0]["value_name"] == "Enabled"
