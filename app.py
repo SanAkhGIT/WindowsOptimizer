@@ -84,6 +84,7 @@ class MainWindow(QMainWindow):
         self.jobs = JobRunner(self)
         self._busy = False
         self._operation_serial = 0
+        self._closing = False
         self._build_ui()
         self.refresh()
 
@@ -422,16 +423,13 @@ class MainWindow(QMainWindow):
         self.admin.setText("Administrator" if is_admin() else "Standard user")
         self.tweaks = all_tweaks()
         self._render_tweaks()
-        if hasattr(self, "appx_panel"):
-            self.appx_panel.scan()
-        self.health.setText("● Live dashboard")
-        self.activity.success(
-            "System scan complete",
-            f"{len(self.tweaks)} operations available • "
-            f"{sum(t.recommended for t in self.tweaks)} recommended",
+        # Keep refresh lightweight. Page inventory scans are explicit actions.
+        self.health.setText("● Ready")
+        self.activity.set_ready()
+        self.activity.append(
+            f"OVERVIEW REFRESHED  {len(self.tweaks)} operations available • "
+            f"{sum(t.recommended for t in self.tweaks)} recommended"
         )
-        if hasattr(self, "dashboard"):
-            self.dashboard._refresh_inventory()
 
     def _render_tweaks(self):
         from PySide6.QtWidgets import QCheckBox, QGroupBox, QScrollArea, QVBoxLayout, QWidget
