@@ -20,6 +20,7 @@ from modules.repair import dism, explorer, sfc
 from modules.services import inventory as services_inventory
 from modules.software import installed_apps, upgrade_all
 from modules.startup import inventory as startup_inventory
+from ui.appx import AppxPanel
 from ui.browser_extensions import BrowserExtensionsPanel
 from ui.maintenance import MaintenancePanel
 from ui.software import SoftwarePanel
@@ -30,6 +31,7 @@ class MainWindow(QMainWindow):
     NAV = (
         ("◉", "Overview"),
         ("✦", "Optimize"),
+        ("◫", "Debloat"),
         ("▦", "Install Apps"),
         ("↻", "Updates"),
         ("⚙", "Windows"),
@@ -143,6 +145,8 @@ OPTIMIZER")
         self.dashboard = SystemDashboard()
         self.stack.addWidget(self.dashboard)
         self._build_tweaks_page()
+        self.appx_panel = AppxPanel(self.output, self._run_job)
+        self.stack.addWidget(self.appx_panel)
         self.software_panel = SoftwarePanel(self.output, self._run_job)
         self.stack.addWidget(self.software_panel)
         self._build_updates_page()
@@ -289,6 +293,8 @@ OPTIMIZER")
         self.admin.setText("Administrator" if is_admin() else "Standard user")
         self.tweaks = all_tweaks()
         self._render_tweaks()
+        if hasattr(self, "appx_panel"):
+            self.appx_panel.scan()
         self.health.setText("● Live dashboard")
         self.output.setPlainText(
             f"SCAN COMPLETE
@@ -323,9 +329,17 @@ OPTIMIZER")
                 check.setChecked(tweak.recommended)
                 check.setProperty("tweak_id", tweak.id)
                 box_layout.addWidget(check)
+                try:
+                    state_fn = tweak.metadata.get("state") if tweak.metadata else None
+                    state = state_fn() if callable(state_fn) else (
+                        "APPLIED" if tweak.check and tweak.check() else "NOT APPLIED"
+                    )
+                except Exception:
+                    state = "UNKNOWN"
                 detail = QLabel(
                     f"{tweak.description}<br><small>"
-                    f"Risk: {tweak.risk} • Reversible: {'Yes' if tweak.reversible else 'No'} • "
+                    f"State: {state} • Risk: {tweak.risk} • "
+                    f"Reversible: {'Yes' if tweak.reversible else 'No'} • "
                     f"Restart: {tweak.restart}</small>"
                 )
                 detail.setWordWrap(True)
@@ -480,7 +494,7 @@ Available plans:
         self._run_job(installed_apps, done=self._show_result, fail=self._show_error)
 
     def install_selected(self, item=None):
-        self._navigate(2)
+        self._navigate(3)
         self.software_panel.focus_search()
 
     def upgrade_software(self):
