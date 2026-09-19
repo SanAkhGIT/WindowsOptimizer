@@ -1,29 +1,105 @@
+from dataclasses import dataclass
+from typing import Iterable
 from core.process import run_executable
 
-CATALOG=[
- ("7zip.7zip","7-Zip","Utilities"),("Google.Chrome","Google Chrome","Browsers"),("Mozilla.Firefox","Mozilla Firefox","Browsers"),("VideoLAN.VLC","VLC","Media"),("Notepad++.Notepad++","Notepad++","Development"),("Microsoft.VisualStudioCode","Visual Studio Code","Development"),("Git.Git","Git","Development"),("Microsoft.PowerToys","PowerToys","Utilities"),("Discord.Discord","Discord","Communication"),("WinSCP.WinSCP","WinSCP","Utilities")
+@dataclass(frozen=True)
+class AppSpec:
+    id: str
+    name: str
+    category: str
+    description: str
+    source: str = "winget"
+    foss: bool = False
+
+CATALOG = [
+    AppSpec("Google.Chrome","Google Chrome","Browsers","Fast Chromium browser."),
+    AppSpec("Mozilla.Firefox","Mozilla Firefox","Browsers","Open-source browser with strong customization.",foss=True),
+    AppSpec("Microsoft.Edge","Microsoft Edge","Browsers","Microsoft's Chromium-based browser."),
+    AppSpec("Brave.Brave","Brave","Browsers","Chromium browser with built-in privacy features."),
+    AppSpec("7zip.7zip","7-Zip","Utilities","Open-source file archiver.",foss=True),
+    AppSpec("voidtools.Everything","Everything","Utilities","Fast file-name search utility."),
+    AppSpec("Microsoft.PowerToys","PowerToys","Utilities","Microsoft utilities for Windows power users."),
+    AppSpec("WinSCP.WinSCP","WinSCP","Utilities","SFTP, FTP and SCP file transfer client."),
+    AppSpec("ShareX.ShareX","ShareX","Utilities","Open-source screenshot and capture utility.",foss=True),
+    AppSpec("File-New-Project.EarTrumpet","EarTrumpet","Utilities","Per-app audio controls for Windows.",foss=True),
+    AppSpec("Bitwarden.Bitwarden","Bitwarden","Security","Open-source password manager.",foss=True),
+    AppSpec("VideoLAN.VLC","VLC","Media","Open-source media player.",foss=True),
+    AppSpec("Spotify.Spotify","Spotify","Media","Music and podcast desktop app."),
+    AppSpec("OBSProject.OBSStudio","OBS Studio","Media","Open-source recording and streaming software.",foss=True),
+    AppSpec("HandBrake.HandBrake","HandBrake","Media","Open-source video transcoder.",foss=True),
+    AppSpec("qBittorrent.qBittorrent","qBittorrent","Media","Open-source BitTorrent client.",foss=True),
+    AppSpec("Discord.Discord","Discord","Communication","Voice, video and community chat."),
+    AppSpec("Telegram.TelegramDesktop","Telegram","Communication","Desktop Telegram client."),
+    AppSpec("Valve.Steam","Steam","Gaming","PC game store and launcher."),
+    AppSpec("EpicGames.EpicGamesLauncher","Epic Games Launcher","Gaming","Epic Games launcher."),
+    AppSpec("GOG.Galaxy","GOG Galaxy","Gaming","GOG game library and launcher."),
+    AppSpec("Notepad++.Notepad++","Notepad++","Development","Open-source advanced text editor.",foss=True),
+    AppSpec("Microsoft.VisualStudioCode","Visual Studio Code","Development","Extensible source-code editor."),
+    AppSpec("Git.Git","Git","Development","Distributed version-control system.",foss=True),
+    AppSpec("Python.Python.3.13","Python 3.13","Development","Python runtime for development and automation.",foss=True),
+    AppSpec("Microsoft.PowerShell","PowerShell","Development","Modern PowerShell."),
+    AppSpec("Microsoft.WindowsTerminal","Windows Terminal","Development","Modern terminal host for Windows.",foss=True),
+    AppSpec("WinMerge.WinMerge","WinMerge","Development","Open-source file and folder comparison tool.",foss=True),
+    AppSpec("9WZDNCRFJ3TJ","Netflix","Entertainment","Netflix Windows app from Microsoft Store.",source="msstore"),
+    AppSpec("Microsoft.OneNote","OneNote","Productivity","Microsoft OneNote desktop application."),
+    AppSpec("TheDocumentFoundation.LibreOffice","LibreOffice","Productivity","Open-source office suite.",foss=True),
+    AppSpec("Microsoft.Teams","Microsoft Teams","Productivity","Microsoft collaboration and meetings app."),
 ]
 
-def _winget(args,timeout=180):
- r=run_executable("winget",args,timeout); return r.stdout or r.stderr, r.returncode
+def _winget(args: list[str], timeout: int = 180):
+    result = run_executable("winget", args, timeout)
+    return result.stdout or result.stderr or "", result.returncode
 
-def installed_apps():
- out,code=_winget(["list","--accept-source-agreements"],90)
- if code and not out: raise RuntimeError("WinGet inventory unavailable. Install/repair App Installer first.")
- return out
+def ensure_winget() -> None:
+    output, code = _winget(["--version"], 30)
+    if code != 0 or not output.strip():
+        raise RuntimeError("WinGet is unavailable. Install or repair Microsoft App Installer first.")
 
-def upgrade_available():
- out,code=_winget(["upgrade","--accept-source-agreements"],120)
- if code and not out: raise RuntimeError("WinGet upgrade inventory unavailable.")
- return out
+def installed_apps() -> str:
+    ensure_winget()
+    output, code = _winget(["list","--accept-source-agreements"],120)
+    if code and not output:
+        raise RuntimeError("WinGet inventory unavailable.")
+    return output
 
-def install(package_id):
- if not any(package_id==row[0] for row in CATALOG): raise ValueError("Package is not in the curated catalog.")
- out,code=_winget(["install","--id",package_id,"--exact","--accept-package-agreements","--accept-source-agreements"],300)
- if code: raise RuntimeError(out or f"WinGet failed for {package_id}.")
- return out or f"Installed {package_id}."
+def installed(package_id: str, source: str = "winget") -> bool:
+    ensure_winget()
+    args=["list","--id",package_id,"--exact","--accept-source-agreements"]
+    if source: args += ["--source",source]
+    output, code = _winget(args,60)
+    lowered=output.lower()
+    return code == 0 and bool(output.strip()) and not any(
+        text in lowered for text in ("no installed package found","no installed package","no package found")
+    )
 
-def upgrade_all():
- out,code=_winget(["upgrade","--all","--accept-package-agreements","--accept-source-agreements"],600)
- if code and "No applicable upgrade found" not in out: raise RuntimeError(out or "WinGet upgrade failed.")
- return out or "No applicable upgrades found."
+def install(package_id: str) -> str:
+    spec=next((app for app in CATALOG if app.id == package_id),None)
+    if spec is None:
+        raise ValueError("Package is not in the curated Windows 11 application catalog.")
+    ensure_winget()
+    args=["install","--id",spec.id,"--exact","--accept-package-agreements","--accept-source-agreements"]
+    if spec.source: args += ["--source",spec.source]
+    output,code=_winget(args,600)
+    if code: raise RuntimeError(output or f"WinGet failed for {spec.name}.")
+    return output or f"Installed {spec.name}."
+
+def install_selected(package_ids: Iterable[str]) -> str:
+    ids=list(dict.fromkeys(package_ids))
+    if not ids: return "No applications selected."
+    results=[]
+    for package_id in ids:
+        try: results.append(f"[OK] {package_id}\n{install(package_id)}")
+        except Exception as exc: results.append(f"[FAILED] {package_id}\n{exc}")
+    return "\n\n".join(results)
+
+def upgrade_available() -> str:
+    ensure_winget()
+    output,code=_winget(["upgrade","--accept-source-agreements"],120)
+    if code and not output: raise RuntimeError("WinGet upgrade inventory unavailable.")
+    return output
+
+def upgrade_all() -> str:
+    ensure_winget()
+    output,code=_winget(["upgrade","--all","--accept-package-agreements","--accept-source-agreements"],600)
+    if code and "No applicable upgrade found" not in output: raise RuntimeError(output or "WinGet upgrade failed.")
+    return output or "No applicable upgrades found."
