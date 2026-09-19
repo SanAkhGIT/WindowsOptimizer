@@ -17,10 +17,10 @@ class OperationResult:
 class Executor:
     def __init__(self,log_dir=None):
         self.log_dir=Path(log_dir or (Path.home()/"WindowsOptimizerBackups")); self.log_dir.mkdir(parents=True,exist_ok=True)
-    def apply(self,tweaks):
+    def apply(self,tweaks,backup_path=None):
         logger = get_logger("executor")
         results=[]
-        receipt=new_receipt('manual')
+        receipt=new_receipt('manual', backup_path=backup_path)
         logger.info("Manual tweak batch started | count=%s", len(tweaks))
         for tweak in tweaks:
             logger.info("Tweak started | id=%s | name=%s", tweak.id, tweak.name)
@@ -35,10 +35,31 @@ class Executor:
             results.append(OperationResult(tweak.id,status,message,verification,datetime.now().isoformat(timespec="seconds")))
         stamp=datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
         (self.log_dir/f"apply_{stamp}.json").write_text(json.dumps([r.__dict__ for r in results],indent=2),encoding="utf-8")
-        receipt_items = tuple(
-            ReceiptItem("tweak", r.tweak_id, "apply", r.status, r.message, r.verification)
-            for r in results
-        )
+        receipt_items = []
+        for tweak, result in zip(tweaks, results):
+            rollback_keys = tuple(
+                getattr(tweak, "metadata", {}).get("rollback_keys", ())
+            )
+            rollback_supported = (
+                result.status != "FAILED"
+                and (
+                    bool(tweak.rollback)
+                    or bool(backup_path and rollback_keys and tweak.check)
+                )
+            )
+            receipt_items.append(
+                ReceiptItem(
+                    "tweak",
+                    result.tweak_id,
+                    "apply",
+                    result.status,
+                    result.message,
+                    result.verification,
+                    rollback_supported,
+                    rollback_keys if backup_path else (),
+                )
+            )
+        receipt_items = tuple(receipt_items)
         receipt_path = save(complete(receipt, receipt_items), self.log_dir.parent)
         logger.info("Manual tweak batch completed | receipt=%s", receipt_path)
         return results
