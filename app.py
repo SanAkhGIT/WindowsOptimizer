@@ -720,61 +720,99 @@ class MainWindow(QMainWindow):
 
         self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
 
+    def _set_page_controls_enabled(self, enabled):
+        """Gate page actions while one global operation is active."""
+        page = self.stack.currentWidget() if hasattr(self, "stack") else None
+        if page is None:
+            return
+        for button in page.findChildren(QPushButton):
+            if button.objectName() in {"nav", "activityToggle"}:
+                continue
+            button.setEnabled(enabled)
+
     def _run_job(self, fn, *args, done=None, fail=None, label=None):
         operation = getattr(fn, "__qualname__", repr(fn))
         title = label or operation.split(".")[-1].replace("_", " ").strip().title()
+        if self._closing:
+            self.logger.warning("Ignoring operation during shutdown | operation=%s", operation)
+            return False
         if self._busy:
             self.logger.warning(
                 "Operation rejected because another job is running | operation=%s",
                 operation,
             )
-            return
-        self.logger.info(
-            "GUI operation requested | operation=%s | args=%r",
-            operation,
-            args,
-        )
+            self.activity.append(f"BUSY    {title} was not started; another operation is running.")
+            return False
+
+        self.logger.info("GUI operation requested | operation=%s | args=%r", operation, args)
         self._busy = True
         self._operation_serial += 1
         operation_id = self._operation_serial
         self.busy_label.setText(f"● Working…  {title}")
+        self._set_page_controls_enabled(False)
         self.activity.start(title)
         self.activity.append(f"START  {title}")
-        signals = self.jobs.submit(fn, *args)
+
+        try:
+            signals = self.jobs.submit(fn, *args)
+        except Exception:
+            self._job_done()
+            raise
 
         def finished(value):
-            if operation_id != self._operation_serial:
-                self.logger.warning("Ignoring stale operation result | id=%s", operation_id)
+            if operation_id != self._operation_serial or self._closing:
+                self.logger.warning("Ignoring stale/destroyed operation result | id=%s", operation_id)
                 return
-            self._job_finished(value, done)
+            self._job_finished(value, done, operation_id)
 
         def failed(error):
-            if operation_id != self._operation_serial:
-                self.logger.warning("Ignoring stale operation error | id=%s", operation_id)
+            if operation_id != self._operation_serial or self._closing:
+                self.logger.warning("Ignoring stale/destroyed operation error | id=%s", operation_id)
                 return
-            self._job_failed(error, fail)
+            self._job_failed(error, fail, operation_id)
 
         signals.finished.connect(finished)
         signals.failed.connect(failed)
+        return True
 
-    def _job_finished(self, value, done):
+    def _job_finished(self, value, done, operation_id):
         self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
-        if done:
-            done(value)
         summary = self._result_summary(value)
+        try:
+            # Release the gate before the callback so follow-up operations can
+            # start (for example, AppX removal followed by a rescan).
+            self._job_done()
+            if done:
+                done(value)
+        except Exception as exc:
+            self.logger.exception("Operation completion callback failed")
+            self._job_failed(f"{type(exc).__name__}: {exc}", None, operation_id)
+            return
+
+        # A completion callback may have started a newer operation. Never let
+        # the old operation overwrite the newer Activity state.
+        if operation_id != self._operation_serial or self._closing:
+            return
         self.activity.append(f"END    {summary}")
         self.activity.success(self.activity.operation.text(), summary)
-        self._job_done()
 
-    def _job_failed(self, error, fail):
+    def _job_failed(self, error, fail, operation_id):
         self.logger.error("GUI operation failed | error=%s", error)
+        try:
+            if fail:
+                fail(error)
+            else:
+                self._show_error(error)
+        except Exception as exc:
+            self.logger.exception("Operation error callback failed")
+            error = f"{error}\nCallback error: {type(exc).__name__}: {exc}"
+        finally:
+            self._job_done()
+
+        if operation_id != self._operation_serial or self._closing:
+            return
         self.activity.append(f"ERROR  {error}")
-        if fail:
-            fail(error)
-        else:
-            self._show_error(error)
         self.activity.error(self.activity.operation.text(), error)
-        self._job_done()
 
     @staticmethod
     def _result_summary(value):
