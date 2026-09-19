@@ -40,7 +40,7 @@ def summary(diff):
         f"Tweaks: +{len(diff.tweak_select)} / clear {len(diff.tweak_clear)}\n"
         f"Apps: +{len(diff.apps_install)} / clear {len(diff.apps_clear)}\n"
         f"Windows features to enable: +{len(diff.features_enable)}\n"
-        f"Unknown catalog apps: {len(diff.features_unknown)}"
+        f"Unknown catalog apps: {len(diff.apps_unknown)}"
     )
 
 
