@@ -14,6 +14,7 @@ from modules.browser_extensions import (
     catalog,
     install,
     installation_status,
+    manifest,
     open_edge_extensions,
     open_install_folder,
     remove,
@@ -97,7 +98,15 @@ class BrowserExtensionsPanel(QWidget):
         extension = next((e for e in catalog() if e.id == extension_id), None)
         if not extension:
             return
-        self.description.setText(extension.description)
+        details = manifest(extension_id)
+        permissions = ", ".join(details.get("permissions", [])) or "None"
+        hosts = ", ".join(details.get("host_permissions", [])) or "None"
+        self.description.setText(
+            f"{extension.description}<br><br>"
+            f"<b>Source:</b> {extension.source_url}<br>"
+            f"<b>Permissions:</b> {permissions}<br>"
+            f"<b>Host access:</b> {hosts}"
+        )
         state = installation_status(extension_id)
         if state["installed"]:
             self.status.setText(
@@ -117,20 +126,25 @@ class BrowserExtensionsPanel(QWidget):
             return
         try:
             path = install(extension_id)
+            try:
+                open_edge_extensions()
+            except Exception:
+                pass
             self._refresh_status()
             if self.output:
                 self.output.setPlainText(
                     f"EDGE EXTENSION PREPARED\n{path}\n\n"
-                    "Next: enable Developer mode in edge://extensions/ and "
-                    "select Load unpacked."
+                    "Edge extension management has been opened. Enable "
+                    "Developer mode, then choose Load unpacked and select this "
+                    "folder."
                 )
             QMessageBox.information(
                 self,
                 "Extension prepared",
                 "The extension files are ready.\n\n"
                 f"{path}\n\n"
-                "Edge requires Developer mode and Load unpacked for this "
-                "local extension.",
+                "Edge extension management has been opened. Enable Developer "
+                "mode, choose Load unpacked, and select this folder.",
             )
         except Exception as exc:
             QMessageBox.critical(self, "Extension install failed", str(exc))
