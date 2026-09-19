@@ -452,12 +452,36 @@ class MainWindow(QMainWindow):
                 fail=self._show_error,
             )
 
+        def restore_backup(backup_path):
+            if self._busy:
+                return
+            if not is_admin():
+                QMessageBox.warning(
+                    self,
+                    "Administrator required",
+                    "Run Windows Optimizer as Administrator before restoring a registry backup.",
+                )
+                return
+            self.output.setPlainText(
+                "REGISTRY BACKUP RESTORE IN PROGRESS\\n"
+                "Restoring the values captured before the selected operation batch..."
+            )
+            self._run_job(
+                self.backup.restore,
+                backup_path,
+                done=lambda count: self._show_result(
+                    f"REGISTRY BACKUP RESTORED\\n{count} captured value(s) processed."
+                ),
+                fail=self._show_error,
+            )
+
         dialog = ProfileManagerDialog(
             self,
             lambda: state,
             apply_profile,
             execute_profile,
             rollback,
+            restore_backup,
         )
         dialog.exec()
 
