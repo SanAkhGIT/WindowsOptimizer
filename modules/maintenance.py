@@ -216,8 +216,8 @@ def windows_management_health() -> MaintenanceResult:
         $startup = @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue)
         $services = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue)
         $reboot = @(
-            Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
-            Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+            Test-Path r'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+            Test-Path r'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
         ) -contains $true
         [pscustomobject]@{
             startup_count = $startup.Count
