@@ -13,6 +13,7 @@ from modules.repair import explorer,sfc,dism
 from modules.startup import inventory as startup_inventory
 from modules.power import current as power_current, plans as power_plans, set_high_performance
 from modules.network_center import adapters as network_adapters, configuration as network_configuration, latency as network_latency
+from ui.system_dashboard import SystemDashboard
 from modules.services import inventory as services_inventory
 
 class MainWindow(QMainWindow):
@@ -25,7 +26,7 @@ class MainWindow(QMainWindow):
   bar=QHBoxLayout()
   for text,fn in [("Scan",self.refresh), ("Backup",self.create_backup), ("Restore Point",self.restore_point), ("Apply Selected",self.apply_selected)]:
    b=QPushButton(text); b.clicked.connect(fn); bar.addWidget(b)
-  root.addLayout(bar); self.tabs=QTabWidget(); root.addWidget(self.tabs,1); self.output=QTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(180); root.addWidget(self.output)
+  root.addLayout(bar); self.tabs=QTabWidget(); root.addWidget(self.tabs); self.output=QTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(180); root.addWidget(self.output)
   self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab(); self._build_windows_tab()
  def _build_tweaks_tab(self):
   page=QWidget(); lay=QVBoxLayout(page); controls=QHBoxLayout(); self.profile=QComboBox(); self.profile.addItem("Custom",None)
