@@ -114,10 +114,12 @@ def start_sshd():
 def stop_sshd():
     result = _command(
         "powershell.exe",
-        ("powershell.exe" if False else "powershell.exe",),
-        1,
+        ("-NoProfile", "-NonInteractive", "-Command", "Stop-Service sshd -ErrorAction Stop"),
+        60,
     )
-    return result.stdout or result.stderr or "OpenSSH Server stop command completed."
+    if result.returncode:
+        raise RuntimeError(result.stderr or "Unable to stop OpenSSH Server.")
+    return "OpenSSH Server stopped."
 
 
 def open_environment_settings():
