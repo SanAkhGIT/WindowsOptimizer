@@ -6,16 +6,15 @@ from core.restore import create_restore_point
 from core.jobs import JobRunner
 from core.profiles import load_profiles
 from modules.catalog import all_tweaks
-from modules.operations import profile_tweaks
-from modules.software import installed_apps,CATALOG,install,upgrade_all
+from modules.software import installed_apps,upgrade_all
 from modules.updates import scan as scan_updates
 from modules.repair import explorer,sfc,dism
 from modules.startup import inventory as startup_inventory
 from modules.power import current as power_current, plans as power_plans, set_high_performance
 from modules.network_center import adapters as network_adapters, configuration as network_configuration, latency as network_latency
-from ui.system_dashboard import SystemDashboard
 from ui.browser_extensions import BrowserExtensionsPanel
 from ui.maintenance import MaintenancePanel
+from ui.software import SoftwarePanel
 from modules.services import inventory as services_inventory
 
 class MainWindow(QMainWindow):
@@ -26,7 +25,7 @@ class MainWindow(QMainWindow):
   h=QHBoxLayout(); t=QLabel("Windows Optimizer"); t.setStyleSheet("font-size:26px;font-weight:700;"); h.addWidget(t); h.addStretch(); self.admin=QLabel(); h.addWidget(self.admin); root.addLayout(h)
   self.system=QLabel(); self.system.setWordWrap(True); root.addWidget(self.system)
   bar=QHBoxLayout()
-  for text,fn in [("Scan",self.refresh), ("Backup",self.create_backup), ("Restore Point",self.restore_point), ("Apply Selected",self.apply_selected)]:
+  for text,fn in [("Scan",self.refresh),("Install Windows 11 Apps",self.focus_software_installer),("Backup",self.create_backup),("Restore Point",self.restore_point),("Apply Selected",self.apply_selected)]:
    b=QPushButton(text); b.clicked.connect(fn); bar.addWidget(b)
   root.addLayout(bar); self.tabs=QTabWidget(); root.addWidget(self.tabs); self.output=QTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(180); root.addWidget(self.output)
   self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab(); self._build_windows_tab(); self._build_browser_extensions_tab(); self._build_maintenance_tab()
@@ -79,14 +78,11 @@ class MainWindow(QMainWindow):
  def _show_apply_results(self,results): self.output.setPlainText("\n".join(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)); self.refresh()
  def _build_windows_tab(self):
   page=QWidget(); lay=QVBoxLayout(page)
-  info=QLabel("Windows management is primarily diagnostic here. Changes are kept explicit instead of applying broad system-wide presets.")
-  info.setWordWrap(True); lay.addWidget(info)
+  info=QLabel("Windows management is primarily diagnostic here. Changes are kept explicit instead of applying broad system-wide presets."); info.setWordWrap(True); lay.addWidget(info)
   row=QHBoxLayout()
   for text,fn in [("Startup Inventory",self.show_startup),("Services",self.show_services),("Power Plans",self.show_power),("Network Adapters",self.show_network),("Network Config",self.show_network_config),("Ping 1.1.1.1",self.show_latency)]:
    b=QPushButton(text); b.clicked.connect(fn); row.addWidget(b)
-  lay.addLayout(row)
-  b=QPushButton("Activate High Performance Power Plan"); b.clicked.connect(self.enable_high_performance); lay.addWidget(b)
-  self.tabs.addTab(page,"Windows")
+  lay.addLayout(row); b=QPushButton("Activate High Performance Power Plan"); b.clicked.connect(self.enable_high_performance); lay.addWidget(b); self.tabs.addTab(page,"Windows")
  def show_startup(self): self._run_job(startup_inventory,done=self._show_result,fail=self._show_error)
  def show_services(self): self._run_job(services_inventory,done=self._show_result,fail=self._show_error)
  def show_power(self): self._run_job(lambda: power_current()+"\n\nAvailable plans:\n"+power_plans(),done=self._show_result,fail=self._show_error)
@@ -97,16 +93,12 @@ class MainWindow(QMainWindow):
   if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator to change the active power plan.")
   if QMessageBox.question(self,"Power plan","Activate High Performance for this Windows installation?")!=QMessageBox.StandardButton.Yes:return
   self._run_job(set_high_performance,done=self._show_result,fail=self._show_error)
- def _build_browser_extensions_tab(self):
-  self.tabs.addTab(BrowserExtensionsPanel(self.output),"Edge Extensions")
- def _build_maintenance_tab(self):
-  self.tabs.addTab(MaintenancePanel(self.output),"Maintenance")
+ def _build_browser_extensions_tab(self): self.tabs.addTab(BrowserExtensionsPanel(self.output),"Edge Extensions")
+ def _build_maintenance_tab(self): self.tabs.addTab(MaintenancePanel(self.output),"Maintenance")
  def _build_software_tab(self):
-  page=QWidget(); lay=QVBoxLayout(page); buttons=QHBoxLayout()
-  for text,fn in [("Installed",self.show_software),("Upgrade All",self.upgrade_software)]: b=QPushButton(text); b.clicked.connect(fn); buttons.addWidget(b)
-  lay.addLayout(buttons); self.apps=QListWidget(); lay.addWidget(self.apps); self.tabs.addTab(page,"Software")
-  for pid,name,cat in CATALOG: item=QListWidgetItem(f"{name}  •  {cat}  •  {pid}"); item.setData(32,pid); self.apps.addItem(item)
-  self.apps.itemDoubleClicked.connect(self.install_selected)
+  self.software_panel=SoftwarePanel(self.output,self._run_job); self.tabs.addTab(self.software_panel,"Install Apps")
+ def focus_software_installer(self):
+  self.tabs.setCurrentWidget(self.software_panel); self.software_panel.focus_search()
  def _build_updates_tab(self):
   page=QWidget(); lay=QVBoxLayout(page); b=QPushButton("Check for WinGet upgrades"); b.clicked.connect(self.check_updates); lay.addWidget(b); self.tabs.addTab(page,"Updates")
  def _build_repairs_tab(self):
@@ -114,21 +106,13 @@ class MainWindow(QMainWindow):
   for text,fn in [("Restart Explorer",self.repair_explorer),("Run SFC /scannow",self.repair_sfc),("Run DISM RestoreHealth",self.repair_dism)]: b=QPushButton(text); b.clicked.connect(fn); lay.addWidget(b)
   self.tabs.addTab(page,"Fixes")
  def show_software(self): self._run_job(installed_apps,done=self._show_result,fail=self._show_error)
- def install_selected(self,item=None):
-  item=item or self.apps.currentItem()
-  if not item:return
-  if not is_admin():return QMessageBox.warning(self,"Administrator required","Run as Administrator to install software.")
-  pid=item.data(32)
-  if QMessageBox.question(self,"Install",f"Install {pid} using WinGet?")!=QMessageBox.StandardButton.Yes:return
-  self._run_job(install,pid,done=self._show_result,fail=self._show_error)
- def upgrade_software(self):
-  if not is_admin():return QMessageBox.warning(self,"Administrator required","Run as Administrator to upgrade software.")
-  self._run_job(upgrade_all,done=self._show_result,fail=self._show_error)
- def check_updates(self): self._run_job(scan_updates,done=self._show_result,fail=self._show_error)
+ def install_selected(self,item=None): self.focus_software_installer()
+ def upgrade_software(self): self.check_updates()
+ def check_updates(self): self._run_job(upgrade_all,done=self._show_result,fail=self._show_error)
  def repair_explorer(self): self._run_job(explorer,done=self._show_result,fail=self._show_error)
  def repair_sfc(self):
-  if not is_admin():return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
+  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
   self._run_job(sfc,done=self._show_result,fail=self._show_error)
  def repair_dism(self):
-  if not is_admin():return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
+  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
   self._run_job(dism,done=self._show_result,fail=self._show_error)
