@@ -12,7 +12,7 @@ The Optimize page can calculate a diff showing:
 - Windows Optional Features that should be enabled
 - unknown application IDs
 
-The feature inventory uses the Windows Optional Feature state reported by Get-WindowsOptionalFeature. Microsoft documents that cmdlet as the supported way to inspect optional feature state on the running OS. citeturn0search4turn0search5
+The feature inventory uses the Windows Optional Feature state reported by Get-WindowsOptionalFeature. Microsoft documents that cmdlet as the supported way to inspect optional feature state on the running OS.
 
 ## Apply policy
 
@@ -35,7 +35,7 @@ It deliberately does not:
 
 This is important because an old profile may have been created on a different machine or Windows build.
 
-Microsoft's optional-feature APIs support explicit enable/disable operations and can report whether a restart is needed. WindowsOptimizer keeps those operations explicit rather than treating a profile as an unrestricted Windows image editor. citeturn0search1turn0search6
+Microsoft's optional-feature APIs support explicit enable/disable operations and can report whether a restart is needed. WindowsOptimizer keeps those operations explicit rather than treating a profile as an unrestricted Windows image editor.
 
 ## Future
 
