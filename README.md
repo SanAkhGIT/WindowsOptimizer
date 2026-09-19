@@ -25,6 +25,7 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Power-plan inventory and controlled High Performance activation
 - Network adapter/configuration inventory and latency testing
 - Repair actions: Explorer, SFC and DISM
+- Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
 
 ## Product principles
@@ -83,6 +84,14 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Bundled Edge extension preparation/installation workflow
 - [x] Edge extension management page launcher
 - [ ] Extension signature/update verification
+
+### Maintenance
+- [x] Daily Task Scheduler integration
+- [x] Missed-run recovery via StartWhenAvailable
+- [x] Age-based temporary-file cleanup
+- [x] Crash/minidump retention cleanup
+- [x] Daily memory-pressure, storage, startup/service and pending-reboot checks
+- [ ] Optional user-configurable maintenance policies
 
 ### Profiles & automation
 - [x] JSON profile foundation
