@@ -125,8 +125,10 @@ def upgrade_all_report() -> UpdateReport:
     )
 
 def _winget(args: list[str], timeout: int = 180):
+    """Run WinGet exactly once and preserve its real exit code/output."""
     result = run_executable("winget", args, timeout)
-    return result.stdout or result.stderr or "", result.returncode
+    output = result.stdout if result.stdout else result.stderr
+    return output or "", result.returncode
 
 def ensure_winget() -> None:
     output, code = _winget(["--version"], 30)
