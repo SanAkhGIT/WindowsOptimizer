@@ -41,3 +41,12 @@ Before a subsystem graduates from experimental to normal use:
 7. GUI work is moved off the UI thread for long operations.
 8. No default action disables security, update infrastructure or core networking.
 9. Performance claims are measured rather than assumed.
+
+
+## Windows Update Center
+- Current update/service/reboot status inspection
+- Explicit quality-update pause/resume controls
+- Explicit feature-update pause/resume controls
+- Optional Windows Update driver exclusion policy
+- Target feature-release policy with explicit clear action
+- Component reset retains renamed cache directories for recovery

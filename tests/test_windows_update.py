@@ -1,5 +1,63 @@
-from modules.windows_update import reset_components
+import modules.windows_update as windows_update
 
 
-def test_reset_components_is_callable():
-    assert callable(reset_components)
+def test_update_controls_are_callable():
+    for name in (
+        "status",
+        "pause_quality",
+        "pause_feature",
+        "resume_quality",
+        "resume_feature",
+        "set_driver_exclusion",
+        "set_target_version",
+        "clear_target_version",
+        "reset_components",
+    ):
+        assert callable(getattr(windows_update, name))
+
+
+def test_target_version_validation(monkeypatch):
+    calls = []
+
+    monkeypatch.setattr(windows_update, "_ensure_admin", lambda: None)
+    monkeypatch.setattr(
+        windows_update,
+        "write_dword",
+        lambda *args: calls.append(("dword", args)),
+    )
+    monkeypatch.setattr(
+        windows_update,
+        "write_string",
+        lambda *args: calls.append(("string", args)),
+    )
+
+    windows_update.set_target_version("25H2")
+
+    assert any(item[0] == "dword" for item in calls)
+    assert any(item[0] == "string" and item[1][-1] == "25H2" for item in calls)
+
+
+def test_target_version_rejects_invalid_labels():
+    try:
+        windows_update.set_target_version("11.0")
+    except ValueError as exc:
+        assert "release label" in str(exc)
+    else:
+        raise AssertionError("Expected invalid target version to be rejected.")
+
+
+def test_reset_script_targets_catroot2(monkeypatch):
+    class Result:
+        returncode = 0
+        stderr = ""
+        stdout = "ok"
+
+    captured = []
+    monkeypatch.setattr(
+        windows_update,
+        "_powershell",
+        lambda script, timeout=300: captured.append(script) or Result(),
+    )
+
+    assert windows_update.reset_components() == "ok"
+    assert r"System32\catroot2" in captured[0]

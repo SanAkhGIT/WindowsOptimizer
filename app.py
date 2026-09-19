@@ -1,7 +1,7 @@
 from pathlib import Path
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog, QGroupBox,
 )
 
 from core.backup import BackupManager
@@ -26,7 +26,7 @@ from modules.services import inventory as services_inventory
 from modules.software import installed_apps, upgrade_all
 from modules.startup import inventory as startup_inventory
 from modules.windows_features import inventory as feature_inventory, set_feature
-from modules.windows_update import status as update_status, reset_components
+from modules.windows_update import (\n    status as update_status, reset_components, pause_quality, pause_feature,\n    resume_quality, resume_feature, set_driver_exclusion, set_target_version,\n    clear_target_version,\n)
 from modules.dns_center import inventory as dns_inventory, flush as dns_flush, set_preset as set_dns_preset, PRESETS as DNS_PRESETS
 from modules.storage_center import categories as storage_categories, system_drive as storage_drive
 from modules.service_manager import inventory as service_inventory, set_start_mode
@@ -226,25 +226,81 @@ class MainWindow(QMainWindow):
     def _build_updates_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        title = QLabel("Software updates")
+
+        title = QLabel("Updates & Windows Update")
         title.setObjectName("section")
         layout.addWidget(title)
+
         label = QLabel(
-            "Review the WinGet upgrade inventory before applying upgrades. "
-            "Automatic daily upgrades are intentionally not part of SYSTEM maintenance."
+            "Review update state first. WinGet software upgrades are separate from "
+            "Windows Update policy controls. Pauses and target-version policies are "
+            "explicit, administrator-only operations."
         )
         label.setObjectName("muted")
         label.setWordWrap(True)
         layout.addWidget(label)
 
-        scan = QPushButton("Check available upgrades")
+        software = QGroupBox("Software updates")
+        software_layout = QHBoxLayout(software)
+        scan = QPushButton("Check WinGet upgrades")
         scan.clicked.connect(self.check_updates)
-        layout.addWidget(scan)
-
+        software_layout.addWidget(scan)
         upgrade = QPushButton("Upgrade all")
         upgrade.setObjectName("primary")
         upgrade.clicked.connect(self.upgrade_software)
-        layout.addWidget(upgrade)
+        software_layout.addWidget(upgrade)
+        software_layout.addStretch()
+        layout.addWidget(software)
+
+        windows = QGroupBox("Windows Update policy")
+        windows_layout = QVBoxLayout(windows)
+
+        row = QHBoxLayout()
+        for text, fn in (
+            ("Refresh status", self.show_update_status),
+            ("Pause quality 35d", self.pause_quality_updates),
+            ("Resume quality", self.resume_quality_updates),
+            ("Pause feature 35d", self.pause_feature_updates),
+            ("Resume feature", self.resume_feature_updates),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(fn)
+            row.addWidget(button)
+        windows_layout.addLayout(row)
+
+        row2 = QHBoxLayout()
+        driver = QPushButton("Exclude drivers")
+        driver.clicked.connect(lambda: self.set_update_driver_policy(True))
+        row2.addWidget(driver)
+        driver_clear = QPushButton("Allow drivers")
+        driver_clear.clicked.connect(lambda: self.set_update_driver_policy(False))
+        row2.addWidget(driver_clear)
+        target = QPushButton("Set target feature version")
+        target.clicked.connect(self.set_update_target_version)
+        row2.addWidget(target)
+        target_clear = QPushButton("Clear target version")
+        target_clear.clicked.connect(self.clear_update_target_version)
+        row2.addWidget(target_clear)
+        row2.addStretch()
+        windows_layout.addLayout(row2)
+
+        note = QLabel(
+            "Microsoft documents 35-day maximum pause windows for feature and quality "
+            "updates. Target release policies should be used deliberately because an "
+            "invalid or older target can prevent feature updates until corrected."
+        )
+        note.setObjectName("muted")
+        note.setWordWrap(True)
+        windows_layout.addWidget(note)
+        layout.addWidget(windows)
+
+        repair = QGroupBox("Repair")
+        repair_layout = QHBoxLayout(repair)
+        reset = QPushButton("Reset Windows Update components")
+        reset.clicked.connect(self.reset_windows_update)
+        repair_layout.addWidget(reset)
+        repair_layout.addStretch()
+        layout.addWidget(repair)
         layout.addStretch()
         self.stack.addWidget(page)
 
@@ -886,6 +942,88 @@ class MainWindow(QMainWindow):
             done=self._show_result,
             fail=self._show_error,
         )
+
+    def _run_update_change(self, fn, *args):
+        try:
+            backup = self.backup.create()
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup failed", str(exc))
+            return
+        self.output.setPlainText(f"WINDOWS UPDATE BACKUP\\n{backup}")
+        self._run_job(fn, *args, done=self._show_result, fail=self._show_error)
+
+    def pause_quality_updates(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        if QMessageBox.question(
+            self, "Pause quality updates",
+            "Pause Windows quality updates for up to 35 days from today?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_update_change(pause_quality)
+
+    def resume_quality_updates(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_update_change(resume_quality)
+
+    def pause_feature_updates(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Pause feature updates", "Run as Administrator.")
+            return
+        if QMessageBox.question(
+            self, "Pause feature updates",
+            "Pause Windows feature updates for up to 35 days from today?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_update_change(pause_feature)
+
+    def resume_feature_updates(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_update_change(resume_feature)
+
+    def set_update_driver_policy(self, enabled):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        action = "exclude" if enabled else "allow"
+        if QMessageBox.question(
+            self, "Windows Update drivers",
+            f"{action.title()} driver packages from normal Windows Update quality-update delivery?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_update_change(set_driver_exclusion, enabled)
+
+    def set_update_target_version(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        version, ok = QInputDialog.getText(
+            self, "Target feature version", "Windows release (example: 25H2):"
+        )
+        if not ok or not version.strip():
+            return
+        if QMessageBox.question(
+            self, "Target feature version",
+            f"Keep Windows Update on Windows 11 {version.strip()} until this policy is changed?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_update_change(set_target_version, version.strip())
+
+    def clear_update_target_version(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        if QMessageBox.question(
+            self, "Clear target version",
+            "Clear the configured Windows Update target feature version?"
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_update_change(clear_target_version)
 
     def show_update_status(self):
         self._run_job(update_status, done=self._show_result, fail=self._show_error)
