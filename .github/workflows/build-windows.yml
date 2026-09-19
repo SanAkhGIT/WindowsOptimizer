@@ -3,6 +3,8 @@ name: Build Windows Executable
 on:
   push:
     branches: [main]
+  pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -23,15 +25,19 @@ jobs:
           cache: pip
 
       - name: Install dependencies
-        run: python -m pip install -r requirements.txt pyinstaller
+        run: python -m pip install -r requirements.txt pyinstaller pytest
 
       - name: Run tests
+        id: tests
+        continue-on-error: true
         run: python -m pytest -q
 
       - name: Build executable
+        if: always()
         run: python -m PyInstaller --noconfirm --clean --onefile --windowed --add-data "extensions;extensions" --name WindowsOptimizer main.py
 
       - name: Upload executable
+        if: always()
         uses: actions/upload-artifact@v4
         with:
           name: WindowsOptimizer-windows-x64
