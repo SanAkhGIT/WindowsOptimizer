@@ -23,9 +23,10 @@ from modules.maintenance import last_runs
 
 
 class MaintenancePanel(QWidget):
-    def __init__(self, output=None):
+    def __init__(self, output=None, run_job=None):
         super().__init__()
         self.output = output
+        self.run_job = run_job
         self.jobs = JobRunner()
         self._build()
         self.refresh()
@@ -149,12 +150,28 @@ class MaintenancePanel(QWidget):
             QMessageBox.critical(self, "Schedule failed", str(exc))
 
     def run_now(self):
+        if self.run_job:
+            self.run_job(
+                run_daily_schedule_now,
+                done=self._run_now_done,
+                fail=self._run_now_failed,
+            )
+            return
         try:
             message = run_daily_schedule_now()
-            if self.output:
-                self.output.setPlainText(message)
+            self._run_now_done(message)
         except Exception as exc:
-            QMessageBox.critical(self, "Maintenance failed", str(exc))
+            self._run_now_failed(str(exc))
+
+    def _run_now_done(self, message):
+        self.refresh()
+        if self.output:
+            self.output.setPlainText(str(message))
+
+    def _run_now_failed(self, error):
+        if self.output:
+            self.output.setPlainText(f"Operation failed:\n{error}")
+        QMessageBox.critical(self, "Maintenance failed", str(error))
 
     def disable(self):
         if QMessageBox.question(

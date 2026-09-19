@@ -1,7 +1,7 @@
 from pathlib import Path
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog, QGroupBox,
+    QPlainTextEdit, QScrollArea, QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog, QGroupBox, QSizePolicy,
 )
 
 from core.backup import BackupManager
@@ -45,6 +45,7 @@ from modules.power_center import activate as activate_power, battery_report
 from modules.repair_center import component_store_check, component_store_scan, component_store_restore
 from ui.appx import AppxPanel
 from ui.browser_extensions import BrowserExtensionsPanel
+from ui.activity import ActivityPanel
 from ui.maintenance import MaintenancePanel
 from ui.software import SoftwarePanel
 from ui.system_dashboard import SystemDashboard
@@ -161,13 +162,22 @@ class MainWindow(QMainWindow):
         main_layout.addWidget(topbar)
 
         self.stack = QStackedWidget()
-        main_layout.addWidget(self.stack, 1)
+        self.stack.setObjectName("pageStack")
+        self.stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
+        page_scroll = QScrollArea()
+        page_scroll.setObjectName("pageScroll")
+        page_scroll.setWidgetResizable(True)
+        page_scroll.setFrameShape(QScrollArea.Shape.NoFrame)
+        page_scroll.setWidget(self.stack)
+        main_layout.addWidget(page_scroll, 1)
 
-        self.output = QTextEdit()
-        self.output.setReadOnly(True)
-        self.output.setMaximumHeight(115)
-        self.output.setPlaceholderText("Operation log")
-        main_layout.addWidget(self.output)
+        self.activity = ActivityPanel()
+        self.output = self.activity.editor
+        self.activity.setSizePolicy(
+            self.activity.sizePolicy().Policy.Expanding,
+            self.activity.sizePolicy().Policy.Minimum,
+        )
+        main_layout.addWidget(self.activity)
         shell.addWidget(main, 1)
 
         self._build_pages()
@@ -188,7 +198,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(DeveloperCenterPanel(self.output, self._run_job, is_admin))
         self._build_repairs_page()
         self.stack.addWidget(BrowserExtensionsPanel(self.output))
-        self.stack.addWidget(MaintenancePanel(self.output))
+        self.stack.addWidget(MaintenancePanel(self.output, self._run_job))
 
     def _build_tweaks_page(self):
         from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QScrollArea, QTabWidget
@@ -378,9 +388,10 @@ class MainWindow(QMainWindow):
         if hasattr(self, "appx_panel"):
             self.appx_panel.scan()
         self.health.setText("● Live dashboard")
-        self.output.setPlainText(
-            f"SCAN COMPLETE\n{len(self.tweaks)} operations available • "
-            f"{sum(t.recommended for t in self.tweaks)} recommended"
+        self.activity.success(
+            "System scan complete",
+            f"{len(self.tweaks)} operations available • "
+            f"{sum(t.recommended for t in self.tweaks)} recommended",
         )
         if hasattr(self, "dashboard"):
             self.dashboard._refresh_inventory()
@@ -676,6 +687,7 @@ class MainWindow(QMainWindow):
 
     def _run_job(self, fn, *args, done=None, fail=None):
         operation = getattr(fn, "__qualname__", repr(fn))
+        title = operation.split(".")[-1].replace("_", " ").strip().title()
         if self._busy:
             self.logger.warning(
                 "Operation rejected because another job is running | operation=%s",
@@ -689,6 +701,8 @@ class MainWindow(QMainWindow):
         )
         self._busy = True
         self.busy_label.setText("● Working…")
+        self.activity.start(title)
+        self.activity.append(f"START  {title}")
         signals = self.jobs.submit(fn, *args)
         signals.finished.connect(lambda value: self._job_finished(value, done))
         signals.failed.connect(lambda error: self._job_failed(error, fail))
@@ -697,13 +711,33 @@ class MainWindow(QMainWindow):
         self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
         if done:
             done(value)
+        summary = self._result_summary(value)
+        self.activity.append(f"END    {summary}")
+        self.activity.success(self.activity.operation.text(), summary)
         self._job_done()
 
     def _job_failed(self, error, fail):
         self.logger.error("GUI operation failed | error=%s", error)
+        self.activity.append(f"ERROR  {error}")
         if fail:
             fail(error)
+        else:
+            self._show_error(error)
+        self.activity.error(self.activity.operation.text(), error)
         self._job_done()
+
+    @staticmethod
+    def _result_summary(value):
+        if value is None:
+            return "Completed successfully."
+        if isinstance(value, str):
+            first = next((line.strip() for line in value.splitlines() if line.strip()), "")
+            return first[:180] if first else "Completed successfully."
+        if isinstance(value, (list, tuple, set)):
+            return f"Completed • {len(value)} result item(s)."
+        if isinstance(value, dict):
+            return f"Completed • {len(value)} result field(s)."
+        return f"Completed • {type(value).__name__}."
 
     def _job_done(self):
         self._busy = False
