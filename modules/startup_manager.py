@@ -53,18 +53,19 @@ def classify(entry):
 
     if "STARTUP" in location_upper:
         source = "Startup folder"
-    elif "\RUNONCE" in location_upper:
+    elif r"\RUNONCE" in location_upper:
         source = "Registry RunOnce"
-    elif "\RUN" in location_upper:
+    elif r"\RUN" in location_upper:
         source = "Registry Run"
     else:
         source = "Other"
 
-    scope = (
-        "User"
-        if "HKCU" in location_upper or "CURRENT_USER" in location_upper or user
-        else "System"
-    )
+    if "HKCU" in location_upper or "HKEY_CURRENT_USER" in location_upper:
+        scope = "User"
+    elif "HKLM" in location_upper or "HKEY_LOCAL_MACHINE" in location_upper:
+        scope = "System"
+    else:
+        scope = "User" if user else "System"
     return {
         **entry,
         "scope": scope,

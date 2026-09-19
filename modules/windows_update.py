@@ -9,6 +9,7 @@ from __future__ import annotations
 import re
 import base64
 import winreg
+from datetime import date
 
 from core.process import run_executable
 from core.registry import read_value, write_dword, write_string, delete_value
@@ -32,10 +33,10 @@ $ErrorActionPreference = 'Stop'
 $names = 'wuauserv','bits','cryptsvc'
 $services = Get-Service -Name $names -ErrorAction SilentlyContinue |
   Select-Object Name, Status, StartType
-$pending = Test-Path 'HKLM:\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'
-$updatePending = Test-Path 'HKLM:\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
-$policy = Get-ItemProperty -Path 'HKLM:\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate' -ErrorAction SilentlyContinue
-$settings = Get-ItemProperty -Path 'HKLM:\SOFTWARE\\Microsoft\\WindowsUpdate\\UpdatePolicy\\Settings' -ErrorAction SilentlyContinue
+$pending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+$updatePending = Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+$policy = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate' -ErrorAction SilentlyContinue
+$settings = Get-ItemProperty -Path 'HKLM:\SOFTWARE\Microsoft\WindowsUpdate\UpdatePolicy\Settings' -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Services = $services
   RebootPending = ($pending -or $updatePending)
@@ -76,14 +77,32 @@ def _delete_policy_value(name):
 
 def pause_quality():
     _ensure_admin()
-    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseQualityUpdatesStartTime", 1)
-    return "Quality updates pause policy enabled; Windows documents a maximum 35-day pause window."
+    start = date.today().isoformat()
+    write_string(
+        winreg.HKEY_LOCAL_MACHINE,
+        POLICY,
+        "PauseQualityUpdatesStartTime",
+        start,
+    )
+    return (
+        f"Quality updates paused from {start}; Windows documents a maximum "
+        "35-day pause window."
+    )
 
 
 def pause_feature():
     _ensure_admin()
-    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseFeatureUpdatesStartTime", 1)
-    return "Feature updates pause policy enabled; Windows documents a maximum 35-day pause window."
+    start = date.today().isoformat()
+    write_string(
+        winreg.HKEY_LOCAL_MACHINE,
+        POLICY,
+        "PauseFeatureUpdatesStartTime",
+        start,
+    )
+    return (
+        f"Feature updates paused from {start}; Windows documents a maximum "
+        "35-day pause window."
+    )
 
 
 def resume_quality():
@@ -127,26 +146,30 @@ def reset_components():
     script = r"""
 $ErrorActionPreference = 'Stop'
 $services = 'bits','wuauserv','cryptsvc'
-foreach ($name in $services) {
-  Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
-}
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
-$cat = Join-Path $env:SystemRoot 'System32\catroot2'
 $renamed = @()
-if (Test-Path $sd) {
-  $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
-  Rename-Item -LiteralPath $sd -NewName $newSd -ErrorAction Stop
-  $renamed += (Join-Path $env:SystemRoot $newSd)
+try {
+  foreach ($name in $services) {
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+  }
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
+  $cat = Join-Path $env:SystemRoot 'System32\catroot2'
+  if (Test-Path $sd) {
+    $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
+    Rename-Item -LiteralPath $sd -NewName $newSd -ErrorAction Stop
+    $renamed += (Join-Path $env:SystemRoot $newSd)
+  }
+  if (Test-Path $cat) {
+    $newCat = "catroot2.WindowsOptimizer." + $stamp
+    Rename-Item -LiteralPath $cat -NewName $newCat -ErrorAction Stop
+    $renamed += (Join-Path $env:SystemRoot 'System32' $newCat)
+  }
 }
-if (Test-Path $cat) {
-  $newCat = "catroot2.WindowsOptimizer." + $stamp
-  Rename-Item -LiteralPath $cat -NewName $newCat -ErrorAction Stop
-  $renamed += (Join-Path $env:SystemRoot 'System32' $newCat)
+finally {
+  Start-Service -Name cryptsvc -ErrorAction SilentlyContinue
+  Start-Service -Name bits -ErrorAction SilentlyContinue
+  Start-Service -Name wuauserv -ErrorAction SilentlyContinue
 }
-Start-Service -Name cryptsvc -ErrorAction SilentlyContinue
-Start-Service -Name bits -ErrorAction SilentlyContinue
-Start-Service -Name wuauserv -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Message = 'Windows Update caches were renamed; original folders were retained.'
   RetainedPaths = $renamed

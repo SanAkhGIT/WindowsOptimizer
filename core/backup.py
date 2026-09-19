@@ -2,6 +2,10 @@ from pathlib import Path
 from datetime import datetime
 import json
 
+from core.logging import get_logger
+
+logger = get_logger("backup")
+
 try:
     import winreg
 except ImportError:  # pragma: no cover - Windows runtime only

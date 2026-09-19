@@ -24,9 +24,9 @@ def inventory():
 $gpu = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
   Select-Object Name,DriverVersion,DriverDate,VideoProcessor,AdapterRAM,Status)
 $game = [pscustomobject]@{
-  GameMode = (Get-ItemPropertyValue -Path 'HKCU:SoftwareMicrosoftGameBar' -Name AutoGameModeEnabled -ErrorAction SilentlyContinue)
-  GameDVR = (Get-ItemPropertyValue -Path 'HKCU:SoftwareMicrosoftWindowsCurrentVersionGameDVR' -Name AppCaptureEnabled -ErrorAction SilentlyContinue)
-  HAGSRaw = (Get-ItemPropertyValue -Path 'HKLM:SYSTEMCurrentControlSetControlGraphicsDrivers' -Name HwSchMode -ErrorAction SilentlyContinue)
+  GameMode = (Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\GameBar' -Name AutoGameModeEnabled -ErrorAction SilentlyContinue)
+  GameDVR = (Get-ItemPropertyValue -Path 'HKCU:\Software\Microsoft\Windows\CurrentVersion\GameDVR' -Name AppCaptureEnabled -ErrorAction SilentlyContinue)
+  HAGSRaw = (Get-ItemPropertyValue -Path 'HKLM:\SYSTEM\CurrentControlSet\Control\GraphicsDrivers' -Name HwSchMode -ErrorAction SilentlyContinue)
 }
 $os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber
 $plans = (powercfg /GETACTIVESCHEME) 2>$null

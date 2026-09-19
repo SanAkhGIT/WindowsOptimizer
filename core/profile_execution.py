@@ -57,6 +57,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
 
     for item in items:
         started = datetime.now().isoformat(timespec="seconds")
+        rollback_keys = ()
         try:
             if item.kind == "tweak" and item.action == "enable":
                 tweak = tweak_map.get(item.identifier)

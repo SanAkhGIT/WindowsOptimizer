@@ -1,4 +1,17 @@
-import subprocess
+from core.process import run_executable
 
-def run_command(command,timeout=120):
- p=subprocess.run(["powershell.exe","-NoProfile","-NonInteractive","-ExecutionPolicy","Bypass","-Command",command],capture_output=True,text=True,encoding="utf-8",errors="replace",timeout=timeout); return p.returncode,p.stdout.strip(),p.stderr.strip()
+
+def run_command(command, timeout=120):
+    result = run_executable(
+        "powershell.exe",
+        (
+            "-NoProfile",
+            "-NonInteractive",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-Command",
+            command,
+        ),
+        timeout=timeout,
+    )
+    return result.returncode, result.stdout, result.stderr

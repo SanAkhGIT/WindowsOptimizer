@@ -9,9 +9,10 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from datetime import datetime, timezone
-import subprocess
 
 import psutil
+
+from core.process import run_executable
 
 
 @dataclass
@@ -197,16 +198,13 @@ def hardware_health() -> MaintenanceResult:
 
 
 def _powershell_json(script: str) -> dict | list:
-    result = subprocess.run(
-        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
+    result = run_executable(
+        "powershell.exe",
+        ["-NoProfile", "-NonInteractive", "-Command", script],
         timeout=30,
     )
     if result.returncode:
-        raise RuntimeError(result.stderr.strip() or "PowerShell query failed.")
+        raise RuntimeError(result.stderr or "PowerShell query failed.")
     return json.loads(result.stdout or "{}")
 
 

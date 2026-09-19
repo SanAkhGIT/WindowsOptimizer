@@ -138,6 +138,10 @@ class ActivityPanel(QFrame):
         self._repolish()
         self.errorRaised.emit(str(message))
 
+    def notice(self, message):
+        self.summary.setText(str(message))
+        self.summary.show()
+
     def clear_log(self):
         self.editor.clear()
 

@@ -81,3 +81,30 @@ def test_execute_approved_plan_persists_rollback_keys(monkeypatch, tmp_path):
     assert result.items[0].rollback_keys == (
         {"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"},
     )
+
+
+
+def test_failed_tweak_still_writes_receipt(monkeypatch, tmp_path):
+    class Backup:
+        def create(self):
+            return tmp_path / "backup"
+
+    tweak = SimpleNamespace(
+        id="broken_tweak",
+        apply=lambda: (_ for _ in ()).throw(RuntimeError("boom")),
+        check=lambda: False,
+        rollback=None,
+        metadata={"rollback_keys": ({"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"},)},
+    )
+    profile = SimpleNamespace(id="demo", version=1)
+    monkeypatch.setattr(execution, "_tweak_map", lambda: {"broken_tweak": tweak})
+
+    item = SimpleNamespace(kind="tweak", action="enable", identifier="broken_tweak", reason="test")
+    result = execution.execute_approved_plan(
+        profile, [item], backup_manager=Backup(), receipt_root=tmp_path
+    )
+
+    assert result.status == "FAILED"
+    assert result.items[0].status == "FAILED"
+    assert result.items[0].rollback_keys == ()
+    assert (tmp_path / "receipts").exists()

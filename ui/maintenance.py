@@ -16,10 +16,9 @@ from core.scheduler import (
     DEFAULT_TIME,
     install_daily_schedule,
     remove_daily_schedule,
-    run_daily_schedule_now,
     schedule_status,
 )
-from modules.maintenance import last_runs
+from modules.maintenance import last_runs, run_daily_maintenance
 
 
 class MaintenancePanel(QWidget):
@@ -27,7 +26,8 @@ class MaintenancePanel(QWidget):
         super().__init__()
         self.output = output
         self.run_job = run_job
-        self.jobs = JobRunner()
+        self.jobs = JobRunner(self)
+        self._refreshing = False
         self._build()
         self.refresh()
 
@@ -95,7 +95,17 @@ class MaintenancePanel(QWidget):
         layout.addWidget(history)
 
     def refresh(self):
-        state = schedule_status()
+        if self._refreshing:
+            return
+        self._refreshing = True
+        self.status.setText("Checking maintenance schedule…")
+        self._refresh_history()
+        signals = self.jobs.submit(schedule_status)
+        signals.finished.connect(self._apply_schedule_status)
+        signals.failed.connect(self._schedule_status_failed)
+
+    def _apply_schedule_status(self, state):
+        self._refreshing = False
         if state.get("installed"):
             self.status.setText(
                 f"Status: <b>Enabled</b><br>"
@@ -105,12 +115,23 @@ class MaintenancePanel(QWidget):
                 f"Last result: {state.get('last_result', 'Unknown')}"
             )
             self.remove_button.setEnabled(True)
-            self.run_button.setEnabled(True)
         else:
-            self.status.setText("Status: <b>Not scheduled</b>")
+            error = state.get("error")
+            self.status.setText(
+                "Status: <b>Not scheduled</b>"
+                + (f"<br>Check failed: {error}" if error else "")
+            )
             self.remove_button.setEnabled(False)
-            self.run_button.setEnabled(False)
+        # Manual maintenance is useful even when no Task Scheduler entry exists.
+        self.run_button.setEnabled(True)
 
+    def _schedule_status_failed(self, error):
+        self._refreshing = False
+        self.status.setText(f"Unable to read schedule status: {error}")
+        self.remove_button.setEnabled(False)
+        self.run_button.setEnabled(True)
+
+    def _refresh_history(self):
         runs = last_runs(5)
         rows = []
         for run in runs:
@@ -137,8 +158,8 @@ class MaintenancePanel(QWidget):
                 "Run WindowsOptimizer as Administrator to create the system maintenance schedule.",
             )
             return
-        try:
-            message = install_daily_schedule()
+
+        def done(message):
             self.refresh()
             if self.output:
                 self.output.setPlainText(
@@ -146,27 +167,45 @@ class MaintenancePanel(QWidget):
                     f"{message}\n\n"
                     "The task runs once per day at 03:00 and can start after a missed run."
                 )
+
+        if self.run_job:
+            self.run_job(
+                install_daily_schedule,
+                done=done,
+                fail=lambda error: QMessageBox.critical(self, "Schedule failed", str(error)),
+                label="Enable daily maintenance schedule",
+            )
+            return
+        try:
+            done(install_daily_schedule())
         except Exception as exc:
             QMessageBox.critical(self, "Schedule failed", str(exc))
 
     def run_now(self):
+        def worker():
+            return run_daily_maintenance()
+
         if self.run_job:
             self.run_job(
-                run_daily_schedule_now,
+                worker,
                 done=self._run_now_done,
                 fail=self._run_now_failed,
+                label="Run maintenance now",
             )
             return
         try:
-            message = run_daily_schedule_now()
-            self._run_now_done(message)
+            self._run_now_done(worker())
         except Exception as exc:
             self._run_now_failed(str(exc))
 
-    def _run_now_done(self, message):
+    def _run_now_done(self, results):
         self.refresh()
+        summary = "\n".join(
+            f"{result.name}: {result.status} — {result.message}"
+            for result in results
+        )
         if self.output:
-            self.output.setPlainText(str(message))
+            self.output.setPlainText(summary or "Maintenance completed.")
 
     def _run_now_failed(self, error):
         if self.output:
@@ -180,10 +219,21 @@ class MaintenancePanel(QWidget):
             "Remove the WindowsOptimizer daily maintenance task?",
         ) != QMessageBox.StandardButton.Yes:
             return
-        try:
-            message = remove_daily_schedule()
+
+        def done(message):
             self.refresh()
             if self.output:
                 self.output.setPlainText(message)
+
+        if self.run_job:
+            self.run_job(
+                remove_daily_schedule,
+                done=done,
+                fail=lambda error: QMessageBox.critical(self, "Disable failed", str(error)),
+                label="Disable daily maintenance schedule",
+            )
+            return
+        try:
+            done(remove_daily_schedule())
         except Exception as exc:
             QMessageBox.critical(self, "Disable failed", str(exc))

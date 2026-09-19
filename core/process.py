@@ -19,6 +19,21 @@ def _decode_output(data):
         return ""
 
     raw = bytes(data)
+    if raw.startswith((b"\xff\xfe", b"\xfe\xff")):
+        for encoding in ("utf-16", "utf-16-le", "utf-16-be"):
+            try:
+                return raw.decode(encoding)
+            except UnicodeDecodeError:
+                pass
+
+    # Some classic Windows utilities emit UTF-16LE without a BOM when stdout
+    # is redirected. A high NUL-byte ratio is a reliable indicator.
+    if raw.count(b"\x00") >= max(2, len(raw) // 4):
+        try:
+            return raw.decode("utf-16-le")
+        except UnicodeDecodeError:
+            pass
+
     for encoding in ("utf-8-sig", "utf-8"):
         try:
             return raw.decode(encoding)
