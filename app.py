@@ -1,118 +1,495 @@
-from PySide6.QtWidgets import QMainWindow,QWidget,QVBoxLayout,QHBoxLayout,QPushButton,QLabel,QTextEdit,QCheckBox,QMessageBox,QTabWidget,QGroupBox,QScrollArea,QListWidget,QListWidgetItem,QComboBox
-from core.system_info import get_system_info,is_admin
+from PySide6.QtWidgets import (
+    QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
+)
+
 from core.backup import BackupManager
 from core.executor import Executor
-from core.restore import create_restore_point
 from core.jobs import JobRunner
 from core.profiles import load_profiles
+from core.restore import create_restore_point
+from core.system_info import is_admin
 from modules.catalog import all_tweaks
-from modules.software import installed_apps,upgrade_all
-from modules.updates import scan as scan_updates
-from modules.repair import explorer,sfc,dism
-from modules.startup import inventory as startup_inventory
+from modules.network_center import (
+    adapters as network_adapters,
+    configuration as network_configuration,
+    latency as network_latency,
+)
 from modules.power import current as power_current, plans as power_plans, set_high_performance
-from modules.network_center import adapters as network_adapters, configuration as network_configuration, latency as network_latency
+from modules.repair import dism, explorer, sfc
+from modules.services import inventory as services_inventory
+from modules.software import installed_apps, upgrade_all
+from modules.startup import inventory as startup_inventory
 from ui.browser_extensions import BrowserExtensionsPanel
 from ui.maintenance import MaintenancePanel
 from ui.software import SoftwarePanel
-from modules.services import inventory as services_inventory
+from ui.system_dashboard import SystemDashboard
+
 
 class MainWindow(QMainWindow):
- def __init__(self):
-  super().__init__(); self.setWindowTitle("Windows Optimizer"); self.resize(1200,820); self.backup=BackupManager(); self.executor=Executor(); self.jobs=JobRunner(); self._busy=False; self._build_ui(); self.refresh()
- def _build_ui(self):
-  c=QWidget(); self.setCentralWidget(c); root=QVBoxLayout(c)
-  h=QHBoxLayout(); t=QLabel("Windows Optimizer"); t.setStyleSheet("font-size:26px;font-weight:700;"); h.addWidget(t); h.addStretch(); self.admin=QLabel(); h.addWidget(self.admin); root.addLayout(h)
-  self.system=QLabel(); self.system.setWordWrap(True); root.addWidget(self.system)
-  bar=QHBoxLayout()
-  for text,fn in [("Scan",self.refresh),("Install Windows 11 Apps",self.focus_software_installer),("Backup",self.create_backup),("Restore Point",self.restore_point),("Apply Selected",self.apply_selected)]:
-   b=QPushButton(text); b.clicked.connect(fn); bar.addWidget(b)
-  root.addLayout(bar); self.tabs=QTabWidget(); root.addWidget(self.tabs); self.output=QTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(180); root.addWidget(self.output)
-  self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab(); self._build_windows_tab(); self._build_browser_extensions_tab(); self._build_maintenance_tab()
- def _build_tweaks_tab(self):
-  page=QWidget(); lay=QVBoxLayout(page); controls=QHBoxLayout(); self.profile=QComboBox(); self.profile.addItem("Custom",None)
-  for p in load_profiles(): self.profile.addItem(p.get("name",p["id"]),p)
-  self.profile.currentIndexChanged.connect(self.select_profile); controls.addWidget(self.profile)
-  for text,fn in [("Recommended",self.select_recommended),("Clear",self.clear_selection)]: b=QPushButton(text); b.clicked.connect(fn); controls.addWidget(b)
-  controls.addStretch(); lay.addLayout(controls); self.tweak_tabs=QTabWidget(); lay.addWidget(self.tweak_tabs); self.tabs.addTab(page,"Tweaks")
- def refresh(self):
-  i=get_system_info(); self.system.setText(f"Windows: {i['windows']} | Build: {i['build']} | CPU: {i['cpu']} | GPU: {i['gpu']} | RAM: {i['ram_gb']} GB | Disk: {i['disk']} | Device: {i['device_type']}"); self.admin.setText("Administrator" if i["admin"] else "Standard user"); self.tweaks=all_tweaks(); self._render_tweaks(); self.output.setPlainText(f"SCAN COMPLETE\n{len(self.tweaks)} operations available • {sum(t.recommended for t in self.tweaks)} recommended")
- def _render_tweaks(self):
-  self.tweak_tabs.clear(); self.checks=[]; groups={}
-  for t in self.tweaks: groups.setdefault(t.category,[]).append(t)
-  for cat,items in groups.items():
-   page=QWidget(); lay=QVBoxLayout(page); scroll=QScrollArea(); scroll.setWidgetResizable(True); inner=QWidget(); il=QVBoxLayout(inner)
-   for t in items:
-    box=QGroupBox(); bl=QVBoxLayout(box); cb=QCheckBox(t.name); cb.setChecked(t.recommended); cb.setProperty("tweak_id",t.id); bl.addWidget(cb); d=QLabel(f"{t.description}\nRisk: {t.risk} • Reversible: {'Yes' if t.reversible else 'No'} • Restart: {t.restart}"); d.setWordWrap(True); bl.addWidget(d); il.addWidget(box); self.checks.append(cb)
-   il.addStretch(); scroll.setWidget(inner); lay.addWidget(scroll); self.tweak_tabs.addTab(page,cat)
- def _set_ids(self,ids):
-  ids=set(ids)
-  for cb in self.checks: cb.setChecked(cb.property("tweak_id") in ids)
- def select_profile(self,index):
-  profile=self.profile.itemData(index)
-  if profile:self._set_ids(profile.get("tweaks",[]))
- def select_recommended(self): self._set_ids(t.id for t in self.tweaks if t.recommended)
- def clear_selection(self): self._set_ids([])
- def create_backup(self):
-  try:self.output.setPlainText(f"BACKUP CREATED\n{self.backup.create()}")
-  except Exception as e:QMessageBox.critical(self,"Backup failed",str(e))
- def restore_point(self):
-  if not is_admin(): QMessageBox.warning(self,"Administrator required","Run Windows Optimizer as Administrator."); return
-  self._run_job(create_restore_point,done=self._show_result,fail=self._show_error)
- def apply_selected(self):
-  if self._busy:return
-  if not is_admin(): QMessageBox.warning(self,"Administrator required","Run as Administrator before applying changes."); return
-  ids={c.property("tweak_id") for c in self.checks if c.isChecked()}; selected=[t for t in self.tweaks if t.id in ids and t.apply]
-  if not selected:return QMessageBox.information(self,"Nothing selected","Select at least one tweak.")
-  if QMessageBox.question(self,"Confirm",f"Apply {len(selected)} selected operation(s)? A registry backup will be created first.")!=QMessageBox.StandardButton.Yes:return
-  try:self.backup.create()
-  except Exception as e:return QMessageBox.critical(self,"Backup failed",str(e))
-  self._run_job(self.executor.apply,selected,done=self._show_apply_results,fail=self._show_error)
- def _run_job(self,fn,*args,done=None,fail=None):
-  self._busy=True; self._set_enabled(False); signals=self.jobs.submit(fn,*args); signals.finished.connect(lambda value:(done(value) if done else None,self._job_done())); signals.failed.connect(lambda error:(fail(error) if fail else None,self._job_done()))
- def _job_done(self): self._busy=False; self._set_enabled(True)
- def _set_enabled(self,enabled):
-  for w in self.findChildren(QPushButton): w.setEnabled(enabled)
- def _show_result(self,value): self.output.setPlainText(str(value))
- def _show_error(self,error): self.output.setPlainText(f"Operation failed:\n{error}")
- def _show_apply_results(self,results): self.output.setPlainText("\n".join(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)); self.refresh()
- def _build_windows_tab(self):
-  page=QWidget(); lay=QVBoxLayout(page)
-  info=QLabel("Windows management is primarily diagnostic here. Changes are kept explicit instead of applying broad system-wide presets."); info.setWordWrap(True); lay.addWidget(info)
-  row=QHBoxLayout()
-  for text,fn in [("Startup Inventory",self.show_startup),("Services",self.show_services),("Power Plans",self.show_power),("Network Adapters",self.show_network),("Network Config",self.show_network_config),("Ping 1.1.1.1",self.show_latency)]:
-   b=QPushButton(text); b.clicked.connect(fn); row.addWidget(b)
-  lay.addLayout(row); b=QPushButton("Activate High Performance Power Plan"); b.clicked.connect(self.enable_high_performance); lay.addWidget(b); self.tabs.addTab(page,"Windows")
- def show_startup(self): self._run_job(startup_inventory,done=self._show_result,fail=self._show_error)
- def show_services(self): self._run_job(services_inventory,done=self._show_result,fail=self._show_error)
- def show_power(self): self._run_job(lambda: power_current()+"\n\nAvailable plans:\n"+power_plans(),done=self._show_result,fail=self._show_error)
- def show_network(self): self._run_job(network_adapters,done=self._show_result,fail=self._show_error)
- def show_network_config(self): self._run_job(network_configuration,done=self._show_result,fail=self._show_error)
- def show_latency(self): self._run_job(network_latency,done=self._show_result,fail=self._show_error)
- def enable_high_performance(self):
-  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator to change the active power plan.")
-  if QMessageBox.question(self,"Power plan","Activate High Performance for this Windows installation?")!=QMessageBox.StandardButton.Yes:return
-  self._run_job(set_high_performance,done=self._show_result,fail=self._show_error)
- def _build_browser_extensions_tab(self): self.tabs.addTab(BrowserExtensionsPanel(self.output),"Edge Extensions")
- def _build_maintenance_tab(self): self.tabs.addTab(MaintenancePanel(self.output),"Maintenance")
- def _build_software_tab(self):
-  self.software_panel=SoftwarePanel(self.output,self._run_job); self.tabs.addTab(self.software_panel,"Install Apps")
- def focus_software_installer(self):
-  self.tabs.setCurrentWidget(self.software_panel); self.software_panel.focus_search()
- def _build_updates_tab(self):
-  page=QWidget(); lay=QVBoxLayout(page); b=QPushButton("Check for WinGet upgrades"); b.clicked.connect(self.check_updates); lay.addWidget(b); self.tabs.addTab(page,"Updates")
- def _build_repairs_tab(self):
-  page=QWidget(); lay=QVBoxLayout(page); info=QLabel("Repairs can take several minutes. SFC/DISM should be used for troubleshooting, not as routine optimization."); info.setWordWrap(True); lay.addWidget(info)
-  for text,fn in [("Restart Explorer",self.repair_explorer),("Run SFC /scannow",self.repair_sfc),("Run DISM RestoreHealth",self.repair_dism)]: b=QPushButton(text); b.clicked.connect(fn); lay.addWidget(b)
-  self.tabs.addTab(page,"Fixes")
- def show_software(self): self._run_job(installed_apps,done=self._show_result,fail=self._show_error)
- def install_selected(self,item=None): self.focus_software_installer()
- def upgrade_software(self): self.check_updates()
- def check_updates(self): self._run_job(upgrade_all,done=self._show_result,fail=self._show_error)
- def repair_explorer(self): self._run_job(explorer,done=self._show_result,fail=self._show_error)
- def repair_sfc(self):
-  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
-  self._run_job(sfc,done=self._show_result,fail=self._show_error)
- def repair_dism(self):
-  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator.")
-  self._run_job(dism,done=self._show_result,fail=self._show_error)
+    NAV = (
+        ("◉", "Overview"),
+        ("✦", "Optimize"),
+        ("▦", "Install Apps"),
+        ("↻", "Updates"),
+        ("⚙", "Windows"),
+        ("✓", "Fixes"),
+        ("◇", "Edge Extensions"),
+        ("◷", "Maintenance"),
+    )
+
+    def __init__(self):
+        super().__init__()
+        self.setWindowTitle("Windows Optimizer")
+        self.resize(1420, 900)
+        self.setMinimumSize(1100, 720)
+        self.backup = BackupManager()
+        self.executor = Executor()
+        self.jobs = JobRunner(self)
+        self._busy = False
+        self._build_ui()
+        self.refresh()
+
+    def _build_ui(self):
+        root = QWidget()
+        self.setCentralWidget(root)
+        shell = QHBoxLayout(root)
+        shell.setContentsMargins(0, 0, 0, 0)
+        shell.setSpacing(0)
+
+        sidebar = QFrame()
+        sidebar.setObjectName("sidebar")
+        sidebar.setFixedWidth(214)
+        sl = QVBoxLayout(sidebar)
+        sl.setContentsMargins(16, 20, 16, 18)
+        sl.setSpacing(6)
+
+        brand = QLabel("WINDOWS
+OPTIMIZER")
+        brand.setStyleSheet("font-size:16pt;font-weight:800;letter-spacing:1px;color:#f5f8fc;")
+        sl.addWidget(brand)
+        sub = QLabel("SYSTEM CONTROL CENTER")
+        sub.setObjectName("muted")
+        sl.addWidget(sub)
+        sl.addSpacing(18)
+
+        self.nav_buttons = []
+        for index, (icon, label) in enumerate(self.NAV):
+            button = QPushButton(f"  {icon}   {label}")
+            button.setObjectName("nav")
+            button.setCheckable(True)
+            button.clicked.connect(lambda checked, i=index: self._navigate(i))
+            sl.addWidget(button)
+            self.nav_buttons.append(button)
+        sl.addStretch()
+
+        self.health = QLabel("●  Starting…")
+        self.health.setObjectName("muted")
+        sl.addWidget(self.health)
+        shell.addWidget(sidebar)
+
+        main = QFrame()
+        main_layout = QVBoxLayout(main)
+        main_layout.setContentsMargins(0, 0, 0, 0)
+        main_layout.setSpacing(0)
+
+        topbar = QFrame()
+        topbar.setObjectName("topbar")
+        tl = QHBoxLayout(topbar)
+        tl.setContentsMargins(24, 14, 24, 14)
+
+        title_box = QVBoxLayout()
+        title = QLabel("Windows Optimizer")
+        title.setObjectName("section")
+        self.page_title = QLabel("Overview")
+        self.page_title.setObjectName("muted")
+        title_box.addWidget(title)
+        title_box.addWidget(self.page_title)
+        tl.addLayout(title_box)
+        tl.addStretch()
+
+        self.busy_label = QLabel("● Ready")
+        self.busy_label.setObjectName("muted")
+        tl.addWidget(self.busy_label)
+        self.admin = QLabel("Standard user")
+        self.admin.setObjectName("muted")
+        tl.addWidget(self.admin)
+
+        apps_button = QPushButton("Install Apps")
+        apps_button.setObjectName("primary")
+        apps_button.clicked.connect(lambda: self._navigate(2))
+        tl.addWidget(apps_button)
+
+        refresh_button = QPushButton("↻")
+        refresh_button.setToolTip("Refresh system overview")
+        refresh_button.clicked.connect(self.refresh)
+        tl.addWidget(refresh_button)
+        main_layout.addWidget(topbar)
+
+        self.stack = QStackedWidget()
+        main_layout.addWidget(self.stack, 1)
+
+        self.output = QTextEdit()
+        self.output.setReadOnly(True)
+        self.output.setMaximumHeight(115)
+        self.output.setPlaceholderText("Operation log")
+        main_layout.addWidget(self.output)
+        shell.addWidget(main, 1)
+
+        self._build_pages()
+        self._navigate(0)
+
+    def _build_pages(self):
+        self.dashboard = SystemDashboard()
+        self.stack.addWidget(self.dashboard)
+        self._build_tweaks_page()
+        self.software_panel = SoftwarePanel(self.output, self._run_job)
+        self.stack.addWidget(self.software_panel)
+        self._build_updates_page()
+        self._build_windows_page()
+        self._build_repairs_page()
+        self.stack.addWidget(BrowserExtensionsPanel(self.output))
+        self.stack.addWidget(MaintenancePanel(self.output))
+
+    def _build_tweaks_page(self):
+        from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QScrollArea, QTabWidget
+
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        intro = QLabel(
+            "Choose explicit Windows changes. Every operation carries risk, "
+            "reversibility and restart metadata."
+        )
+        intro.setObjectName("muted")
+        intro.setWordWrap(True)
+        layout.addWidget(intro)
+
+        controls = QHBoxLayout()
+        self.profile = QComboBox()
+        self.profile.addItem("Custom", None)
+        for profile in load_profiles():
+            self.profile.addItem(profile.get("name", profile["id"]), profile)
+        self.profile.currentIndexChanged.connect(self.select_profile)
+        controls.addWidget(self.profile)
+
+        for text, fn in (("Recommended", self.select_recommended), ("Clear", self.clear_selection)):
+            button = QPushButton(text)
+            button.clicked.connect(fn)
+            controls.addWidget(button)
+        controls.addStretch()
+        layout.addLayout(controls)
+
+        self.tweak_tabs = QTabWidget()
+        layout.addWidget(self.tweak_tabs)
+        self.stack.addWidget(page)
+
+    def _build_updates_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        title = QLabel("Software updates")
+        title.setObjectName("section")
+        layout.addWidget(title)
+        label = QLabel(
+            "Review the WinGet upgrade inventory before applying upgrades. "
+            "Automatic daily upgrades are intentionally not part of SYSTEM maintenance."
+        )
+        label.setObjectName("muted")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        scan = QPushButton("Check available upgrades")
+        scan.clicked.connect(self.check_updates)
+        layout.addWidget(scan)
+
+        upgrade = QPushButton("Upgrade all")
+        upgrade.setObjectName("primary")
+        upgrade.clicked.connect(self.upgrade_software)
+        layout.addWidget(upgrade)
+        layout.addStretch()
+        self.stack.addWidget(page)
+
+    def _build_windows_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        title = QLabel("Windows management")
+        title.setObjectName("section")
+        layout.addWidget(title)
+        info = QLabel(
+            "Diagnostics first. System-wide changes are explicit and guarded "
+            "instead of bundled into a blind preset."
+        )
+        info.setObjectName("muted")
+        info.setWordWrap(True)
+        layout.addWidget(info)
+
+        row = QHBoxLayout()
+        actions = (
+            ("Startup inventory", self.show_startup),
+            ("Services", self.show_services),
+            ("Power plans", self.show_power),
+            ("Network adapters", self.show_network),
+            ("Network config", self.show_network_config),
+            ("Ping 1.1.1.1", self.show_latency),
+        )
+        for text, fn in actions:
+            button = QPushButton(text)
+            button.clicked.connect(fn)
+            row.addWidget(button)
+        layout.addLayout(row)
+
+        high = QPushButton("Activate High Performance power plan")
+        high.clicked.connect(self.enable_high_performance)
+        layout.addWidget(high)
+        layout.addStretch()
+        self.stack.addWidget(page)
+
+    def _build_repairs_page(self):
+        page = QWidget()
+        layout = QVBoxLayout(page)
+        title = QLabel("Fixes & repair")
+        title.setObjectName("section")
+        layout.addWidget(title)
+        label = QLabel(
+            "Use repair tools for troubleshooting. SFC/DISM can take several "
+            "minutes and are not routine performance tweaks."
+        )
+        label.setObjectName("muted")
+        label.setWordWrap(True)
+        layout.addWidget(label)
+
+        for text, fn in (
+            ("Restart Explorer", self.repair_explorer),
+            ("Run SFC /scannow", self.repair_sfc),
+            ("Run DISM RestoreHealth", self.repair_dism),
+        ):
+            button = QPushButton(text)
+            button.clicked.connect(fn)
+            layout.addWidget(button)
+        layout.addStretch()
+        self.stack.addWidget(page)
+
+    def _navigate(self, index):
+        self.stack.setCurrentIndex(index)
+        for i, button in enumerate(self.nav_buttons):
+            button.setChecked(i == index)
+        self.page_title.setText(self.NAV[index][1])
+
+    def refresh(self):
+        self.admin.setText("Administrator" if is_admin() else "Standard user")
+        self.tweaks = all_tweaks()
+        self._render_tweaks()
+        self.health.setText("● Live dashboard")
+        self.output.setPlainText(
+            f"SCAN COMPLETE
+{len(self.tweaks)} operations available • "
+            f"{sum(t.recommended for t in self.tweaks)} recommended"
+        )
+        if hasattr(self, "dashboard"):
+            self.dashboard._refresh_inventory()
+
+    def _render_tweaks(self):
+        from PySide6.QtWidgets import QCheckBox, QGroupBox, QScrollArea, QVBoxLayout, QWidget
+
+        self.tweak_tabs.clear()
+        self.checks = []
+        groups = {}
+        for tweak in self.tweaks:
+            groups.setdefault(tweak.category, []).append(tweak)
+
+        for category, items in groups.items():
+            page = QWidget()
+            layout = QVBoxLayout(page)
+            scroll = QScrollArea()
+            scroll.setWidgetResizable(True)
+            inner = QWidget()
+            inner_layout = QVBoxLayout(inner)
+
+            for tweak in items:
+                box = QGroupBox()
+                box.setObjectName("card")
+                box_layout = QVBoxLayout(box)
+                check = QCheckBox(tweak.name)
+                check.setChecked(tweak.recommended)
+                check.setProperty("tweak_id", tweak.id)
+                box_layout.addWidget(check)
+                detail = QLabel(
+                    f"{tweak.description}<br><small>"
+                    f"Risk: {tweak.risk} • Reversible: {'Yes' if tweak.reversible else 'No'} • "
+                    f"Restart: {tweak.restart}</small>"
+                )
+                detail.setWordWrap(True)
+                box_layout.addWidget(detail)
+                inner_layout.addWidget(box)
+                self.checks.append(check)
+
+            inner_layout.addStretch()
+            scroll.setWidget(inner)
+            layout.addWidget(scroll)
+            self.tweak_tabs.addTab(page, category)
+
+    def _set_ids(self, ids):
+        ids = set(ids)
+        for check in self.checks:
+            check.setChecked(check.property("tweak_id") in ids)
+
+    def select_profile(self, index):
+        profile = self.profile.itemData(index)
+        if profile:
+            self._set_ids(profile.get("tweaks", []))
+
+    def select_recommended(self):
+        self._set_ids(t.id for t in self.tweaks if t.recommended)
+
+    def clear_selection(self):
+        self._set_ids([])
+
+    def create_backup(self):
+        try:
+            self.output.setPlainText(f"BACKUP CREATED
+{self.backup.create()}")
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup failed", str(exc))
+
+    def restore_point(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run Windows Optimizer as Administrator.")
+            return
+        self._run_job(create_restore_point, done=self._show_result, fail=self._show_error)
+
+    def apply_selected(self):
+        if self._busy:
+            return
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator before applying changes.")
+            return
+
+        ids = {c.property("tweak_id") for c in self.checks if c.isChecked()}
+        selected = [t for t in self.tweaks if t.id in ids and t.apply]
+        if not selected:
+            QMessageBox.information(self, "Nothing selected", "Select at least one tweak.")
+            return
+
+        if QMessageBox.question(
+            self,
+            "Confirm changes",
+            f"Apply {len(selected)} selected operation(s)? A registry backup will be created first.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+
+        try:
+            self.backup.create()
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup failed", str(exc))
+            return
+
+        self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
+
+    def _run_job(self, fn, *args, done=None, fail=None):
+        if self._busy:
+            return
+        self._busy = True
+        self.busy_label.setText("● Working…")
+        signals = self.jobs.submit(fn, *args)
+        signals.finished.connect(lambda value: self._job_finished(value, done))
+        signals.failed.connect(lambda error: self._job_failed(error, fail))
+
+    def _job_finished(self, value, done):
+        if done:
+            done(value)
+        self._job_done()
+
+    def _job_failed(self, error, fail):
+        if fail:
+            fail(error)
+        self._job_done()
+
+    def _job_done(self):
+        self._busy = False
+        self.busy_label.setText("● Ready")
+
+    def _show_result(self, value):
+        self.output.setPlainText(str(value))
+
+    def _show_error(self, error):
+        self.output.setPlainText(f"Operation failed:
+{error}")
+
+    def _show_apply_results(self, results):
+        self.output.setPlainText(
+            "
+".join(
+                f"{result.tweak_id}: {result.status} — {result.message} — {result.verification}"
+                for result in results
+            )
+        )
+        self.dashboard._refresh_inventory()
+
+    def show_startup(self):
+        self._run_job(startup_inventory, done=self._show_result, fail=self._show_error)
+
+    def show_services(self):
+        self._run_job(services_inventory, done=self._show_result, fail=self._show_error)
+
+    def show_power(self):
+        self._run_job(
+            lambda: power_current() + "
+
+Available plans:
+" + power_plans(),
+            done=self._show_result,
+            fail=self._show_error,
+        )
+
+    def show_network(self):
+        self._run_job(network_adapters, done=self._show_result, fail=self._show_error)
+
+    def show_network_config(self):
+        self._run_job(network_configuration, done=self._show_result, fail=self._show_error)
+
+    def show_latency(self):
+        self._run_job(network_latency, done=self._show_result, fail=self._show_error)
+
+    def enable_high_performance(self):
+        if not is_admin():
+            QMessageBox.warning(
+                self,
+                "Administrator required",
+                "Run as Administrator to change the active power plan.",
+            )
+            return
+        if QMessageBox.question(
+            self,
+            "Power plan",
+            "Activate High Performance for this Windows installation?",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(set_high_performance, done=self._show_result, fail=self._show_error)
+
+    def show_software(self):
+        self._run_job(installed_apps, done=self._show_result, fail=self._show_error)
+
+    def install_selected(self, item=None):
+        self._navigate(2)
+        self.software_panel.focus_search()
+
+    def upgrade_software(self):
+        self._run_job(upgrade_all, done=self._show_result, fail=self._show_error)
+
+    def check_updates(self):
+        from modules.software import upgrade_available
+        self._run_job(upgrade_available, done=self._show_result, fail=self._show_error)
+
+    def repair_explorer(self):
+        self._run_job(explorer, done=self._show_result, fail=self._show_error)
+
+    def repair_sfc(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_job(sfc, done=self._show_result, fail=self._show_error)
+
+    def repair_dism(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_job(dism, done=self._show_result, fail=self._show_error)
