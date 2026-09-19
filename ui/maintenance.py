@@ -79,7 +79,8 @@ class MaintenancePanel(QWidget):
             tasks_layout.addWidget(label)
         tasks_layout.addWidget(QLabel(
             "Not included: automatic RAM-cache purging, SFC/DISM, driver "
-            "installation, registry sweeping, or automatic software upgrades."
+            "installation, registry sweeping, or automatic software upgrades. "
+            "Those remain explicit/manual operations."
         ))
         layout.addWidget(tasks)
 
