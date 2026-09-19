@@ -1,0 +1,6 @@
+{
+  "name": "WindowsOptimizer",
+  "status": "initial_safe_foundation",
+  "target": "Windows 11 x64",
+  "architecture": ["scan", "backup", "tweak modules", "GUI", "PyInstaller"]
+}
