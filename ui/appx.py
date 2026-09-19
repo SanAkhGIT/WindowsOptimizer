@@ -55,9 +55,9 @@ class AppxPanel(QWidget):
         self.recommended_only.toggled.connect(self._render)
         controls.addWidget(self.recommended_only)
 
-        scan = QPushButton("Scan")
-        scan.clicked.connect(self.scan)
-        controls.addWidget(scan)
+        self.scan_button = QPushButton("Scan")
+        self.scan_button.clicked.connect(self.scan)
+        controls.addWidget(self.scan_button)
         layout.addLayout(controls)
 
         actions = QHBoxLayout()
@@ -92,7 +92,7 @@ class AppxPanel(QWidget):
         self.table.horizontalHeader().setStretchLastSection(True)
         layout.addWidget(self.table, 1)
 
-        self.summary = QLabel("No inventory loaded.")
+        self.summary = QLabel("No inventory loaded. Click Scan to inspect installed AppX packages.")
         self.summary.setObjectName("muted")
         layout.addWidget(self.summary)
 
@@ -104,11 +104,29 @@ class AppxPanel(QWidget):
                 "Run Windows Optimizer as Administrator to inventory all user profiles.",
             )
             return
+        self.scan_button.setEnabled(False)
+        self.scan_button.setText("Scanning…")
+        self.summary.setText(
+            "Scanning installed AppX packages… this may take a few seconds."
+        )
+
+        def failed(error):
+            self.scan_button.setEnabled(True)
+            self.scan_button.setText("Scan")
+            self.summary.setText("Scan failed. See Activity for details.")
+            self.output.setPlainText(f"AppX scan failed:\n{error}")
+
+        def loaded(packages):
+            self.scan_button.setEnabled(True)
+            self.scan_button.setText("Scan")
+            self._loaded(packages)
+
         self.run_job(
             inventory,
             self.all_users.isChecked(),
-            done=self._loaded,
-            fail=lambda error: self.output.setPlainText(f"AppX scan failed:\n{error}"),
+            done=loaded,
+            fail=failed,
+            label="Scanning AppX packages",
         )
 
     def _loaded(self, packages):
