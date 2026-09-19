@@ -10,6 +10,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 
 from core.operation_receipts import ReceiptItem, load, complete, save
+from core.backup import BackupManager
 from modules.catalog import all_tweaks
 from modules.windows_features import set_feature
 
@@ -37,9 +38,20 @@ def rollback_receipt_item(receipt_path, item_index, *, receipt_root=None):
     try:
         if item.kind == "tweak" and item.action == "enable":
             tweak = {t.id: t for t in all_tweaks()}.get(item.identifier)
-            if tweak is None or not tweak.rollback:
+            if tweak is None:
+                raise ValueError(f"Unknown tweak: {item.identifier}.")
+            if item.rollback_keys and receipt.backup_path and tweak.check:
+                if not tweak.check():
+                    raise ValueError(
+                        "Current state no longer matches the verified post-change state; "
+                        "rollback was not applied to avoid overwriting a later change."
+                    )
+                count = BackupManager().restore_entries(receipt.backup_path, item.rollback_keys)
+                message = f"Restored {count} captured registry value(s) from the operation backup."
+            elif tweak.rollback:
+                message = tweak.rollback()
+            else:
                 raise ValueError(f"No rollback implementation for {item.identifier}.")
-            message = tweak.rollback()
         elif item.kind == "windows_feature" and item.action == "enable":
             message = set_feature(item.identifier, False)
         else:
