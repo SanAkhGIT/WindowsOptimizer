@@ -39,7 +39,7 @@ from modules.windows_update import (
     clear_target_version,
 )
 from modules.dns_center import inventory as dns_inventory, flush as dns_flush, set_preset as set_dns_preset, PRESETS as DNS_PRESETS
-from modules.storage_center import categories as storage_categories, system_drive as storage_drive
+from modules.storage_center import candidates as storage_categories, system_drive as storage_drive
 from modules.service_manager import inventory as service_inventory, set_start_mode
 from modules.power_center import activate as activate_power, battery_report
 from modules.repair_center import component_store_check, component_store_scan, component_store_restore
