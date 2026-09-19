@@ -1,11 +1,16 @@
 from core.process import run_executable
+from modules.repair import _clean_console_output
 
 
 def _run(executable, args, timeout=900):
     result = run_executable(executable, args, timeout=timeout)
+    output = _clean_console_output(result.stdout)
     if result.returncode != 0:
-        raise RuntimeError(result.stderr or result.stdout or f"{executable} failed.")
-    return result.stdout or f"{executable} completed successfully."
+        detail = _clean_console_output(result.stderr) or output
+        raise RuntimeError(
+            detail or f"{executable} failed with exit code {result.returncode}."
+        )
+    return output or f"{executable} completed successfully."
 
 
 def component_store_check():
