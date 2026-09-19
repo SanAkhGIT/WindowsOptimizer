@@ -98,16 +98,16 @@ class MainWindow(QMainWindow):
 
         sidebar = QFrame()
         sidebar.setObjectName("sidebar")
-        sidebar.setFixedWidth(214)
+        sidebar.setFixedWidth(224)
         sl = QVBoxLayout(sidebar)
-        sl.setContentsMargins(16, 20, 16, 18)
-        sl.setSpacing(6)
+        sl.setContentsMargins(14, 20, 14, 18)
+        sl.setSpacing(5)
 
         brand = QLabel("WINDOWS\nOPTIMIZER")
-        brand.setStyleSheet("font-size:16pt;font-weight:800;letter-spacing:1px;color:#f5f8fc;")
+        brand.setObjectName("brand")
         sl.addWidget(brand)
         sub = QLabel("SYSTEM CONTROL CENTER")
-        sub.setObjectName("muted")
+        sub.setObjectName("brandSub")
         sl.addWidget(sub)
         sl.addSpacing(18)
 
@@ -134,7 +134,7 @@ class MainWindow(QMainWindow):
         topbar = QFrame()
         topbar.setObjectName("topbar")
         tl = QHBoxLayout(topbar)
-        tl.setContentsMargins(24, 14, 24, 14)
+        tl.setContentsMargins(24, 12, 24, 12)
 
         title_box = QVBoxLayout()
         title = QLabel("Windows Optimizer")
