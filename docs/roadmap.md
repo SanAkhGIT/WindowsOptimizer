@@ -20,7 +20,7 @@ Inventory available upgrades, allow controlled upgrade-all, and expose Windows U
 Use an explicit package inventory and detect installed state first. The current AppX surface classifies framework/non-removable/protected packages, marks common unwanted packages as recommendation hints, and removes only exact selected package full names. Existing installation folders can be registered again when Windows still has the package files. Future work should add provisioned-package management and stronger restore catalogs.
 
 ### Automation
-Profiles should become portable configuration files. A future dry-run mode should show the exact operations a profile would perform before anything changes. The Standard profile now reflects the project's conservative privacy/UI baseline rather than only legacy UI toggles.
+Profiles are now named and versioned, with an additive operation planner and persistent execution receipts. Profile review opens a per-operation approval step: only explicitly checked operations are executed, one registry backup is created for the approved batch, each operation is verified where possible, and the final receipt records the outcome. Future work should add richer rollback metadata and a true unattended mode with a separate non-interactive approval policy.
 
 ### Windows Features
 Inventory optional Windows features and allow exact-name enable/disable actions. Feature changes use the supported DISM PowerShell cmdlets and never accept wildcard feature names from the UI. Reboot requirements are surfaced from Windows.
