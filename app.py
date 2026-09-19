@@ -5,6 +5,7 @@ from PySide6.QtWidgets import (
 )
 
 from core.backup import BackupManager
+from core.logging import get_logger
 from core.executor import Executor
 from core.jobs import JobRunner
 from core.profiles import load_profiles
@@ -62,6 +63,8 @@ class MainWindow(QMainWindow):
 
     def __init__(self):
         super().__init__()
+        self.logger = get_logger("gui")
+        self.logger.info("Main window created")
         self.setWindowTitle("Windows Optimizer")
         self.resize(1420, 900)
         self.setMinimumSize(1100, 720)
@@ -752,8 +755,11 @@ class MainWindow(QMainWindow):
         self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
 
     def _run_job(self, fn, *args, done=None, fail=None):
+        operation = getattr(fn, "__qualname__", repr(fn))
         if self._busy:
+            self.logger.warning("Operation rejected because another job is running | operation=%s", operation)
             return
+        self.logger.info("GUI operation requested | operation=%s | args=%r", operation, args)
         self._busy = True
         self.busy_label.setText("● Working…")
         signals = self.jobs.submit(fn, *args)
@@ -761,11 +767,13 @@ class MainWindow(QMainWindow):
         signals.failed.connect(lambda error: self._job_failed(error, fail))
 
     def _job_finished(self, value, done):
+        self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
         if done:
             done(value)
         self._job_done()
 
     def _job_failed(self, error, fail):
+        self.logger.error("GUI operation failed | error=%s", error)
         if fail:
             fail(error)
         self._job_done()
@@ -778,6 +786,7 @@ class MainWindow(QMainWindow):
         self.output.setPlainText(str(value))
 
     def _show_error(self, error):
+        self.logger.error("User-visible operation error | %s", error)
         self.output.setPlainText(f"Operation failed:\n{error}")
 
     def _show_apply_results(self, results):
