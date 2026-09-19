@@ -7,18 +7,18 @@ from core.profile_manager import (
     build_plan, delete_profile, format_plan, list_profiles, save_profile,
 )
 from core.configuration import build
-from core.operation_receipts import recent
 from ui.operation_approval import OperationApprovalDialog
 from ui.recovery import RecoveryDialog
 
 
 class ProfileManagerDialog(QDialog):
-    def __init__(self, parent, get_state, apply_profile, execute_profile, rollback):
+    def __init__(self, parent, get_state, apply_profile, execute_profile, rollback, restore_backup):
         super().__init__(parent)
         self.get_state = get_state
         self.apply_profile = apply_profile
         self.execute_profile = execute_profile
         self.rollback = rollback
+        self.restore_backup = restore_backup
         self.setWindowTitle("Profile Manager")
         self.resize(720, 560)
 
@@ -136,7 +136,7 @@ class ProfileManagerDialog(QDialog):
         dialog.exec()
 
     def show_receipts(self):
-        dialog = RecoveryDialog(self, self.rollback)
+        dialog = RecoveryDialog(self, self.rollback, self.restore_backup)
         dialog.exec()
 
     def delete_selected(self):
