@@ -8,7 +8,7 @@ from core.backup import BackupManager
 from core.executor import Executor
 from core.jobs import JobRunner
 from core.profiles import load_profiles
-from core.configuration import build as build_configuration, save as save_configuration, load as load_configuration
+from core.configuration import build as build_configuration, save as save_configuration, load as load_configuration, export_winget
 from core.restore import create_restore_point
 from core.system_info import is_admin
 from modules.catalog import all_tweaks
@@ -406,6 +406,23 @@ class MainWindow(QMainWindow):
             )
         except Exception as exc:
             self._show_error(str(exc))
+
+    def export_winget_packages(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export installed WinGet packages",
+            str(Path.home() / "WindowsOptimizer-winget-export.json"),
+            "WinGet export (*.json)",
+        )
+        if not path:
+            return
+        self._run_job(
+            export_winget, path,
+            done=lambda saved: self.output.setPlainText(
+                f"WINGET PACKAGE EXPORT\n{saved}\n"
+                "Review the package list before importing it on another machine."
+            ),
+            fail=self._show_error,
+        )
 
     def import_configuration(self):
         path, _ = QFileDialog.getOpenFileName(
