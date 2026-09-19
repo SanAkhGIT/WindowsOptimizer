@@ -36,15 +36,17 @@ def _extract_address(value):
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, dict):
-        for key in (
+        preferred = (
             "IPAddress",
             "IPv4Address",
             "IPv6Address",
             "ServerAddresses",
             "Address",
             "Value",
-            "Name",
-        ):
+            "NetIPAddress",
+        )
+        keys = list(preferred) + [key for key in value if key not in preferred]
+        for key in keys:
             candidate = value.get(key)
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
