@@ -40,7 +40,7 @@ def classify(service):
         str(service.get(key, "") or "")
         for key in ("Name", "DisplayName", "PathName", "StartName")
     ).lower()
-    windows_markers = ("microsoft", r"windows\", "windows\")
+    windows_markers = ("microsoft", "\\windows\\", "windows\\")
     if any(marker in text for marker in windows_markers):
         return "Windows"
     if any(marker in text for marker in ("intel", "amd", "nvidia", "realtek", "oem")):
