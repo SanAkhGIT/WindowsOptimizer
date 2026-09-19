@@ -771,6 +771,13 @@ class MainWindow(QMainWindow):
             return first[:180] if first else "Completed successfully."
         if isinstance(value, (list, tuple, set)):
             return f"Completed • {len(value)} result item(s)."
+        if hasattr(value, "action") and hasattr(value, "available") and hasattr(value, "remaining"):
+            if getattr(value, "action", "") == "upgrade":
+                return (
+                    f"{value.updated} updated • {value.remaining} remaining "
+                    f"(started with {value.available})"
+                )
+            return f"{value.available} app(s) need an update."
         if isinstance(value, dict):
             return f"Completed • {len(value)} result field(s)."
         return f"Completed • {type(value).__name__}."
