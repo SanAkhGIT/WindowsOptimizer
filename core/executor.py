@@ -19,6 +19,7 @@ class Executor:
         self.log_dir=Path(log_dir or (Path.home()/"WindowsOptimizerBackups")); self.log_dir.mkdir(parents=True,exist_ok=True)
     def apply(self,tweaks,backup_path=None):
         logger = get_logger("executor")
+        tweaks = tuple(tweaks)
         results=[]
         receipt=new_receipt('manual', backup_path=backup_path)
         logger.info("Manual tweak batch started | count=%s", len(tweaks))
@@ -60,6 +61,6 @@ class Executor:
                 )
             )
         receipt_items = tuple(receipt_items)
-        receipt_path = save(complete(receipt, receipt_items), self.log_dir.parent)
+        receipt_path = save(complete(receipt, receipt_items), self.log_dir)
         logger.info("Manual tweak batch completed | receipt=%s", receipt_path)
         return results
