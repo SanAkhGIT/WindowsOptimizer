@@ -22,19 +22,10 @@ def records():
     try:
         value = json.loads(inventory())
     except json.JSONDecodeError as exc:
-        raise RuntimeError(
-            f"Service inventory returned invalid JSON: {exc}"
-        ) from exc
+        raise RuntimeError(f"Service inventory returned invalid JSON: {exc}") from exc
     if isinstance(value, dict):
         value = [value]
-    return [
-        {
-            **item,
-            "classification": classify(item),
-            "recommendation": recommendation(item),
-        }
-        for item in value
-    ]
+    return [{**item, "classification": classify(item), "recommendation": recommendation(item)} for item in value]
 
 
 def classify(service):
@@ -42,9 +33,10 @@ def classify(service):
         str(service.get(key, "") or "")
         for key in ("Name", "DisplayName", "PathName", "StartName")
     ).lower()
-    if any(x in text for x in ("microsoft", r"\windows\", r"windows\")):
+    windows_markers = ("microsoft", "\windows\", "windows\")
+    if any(marker in text for marker in windows_markers):
         return "Windows"
-    if any(x in text for x in ("intel", "amd", "nvidia", "realtek", "oem")):
+    if any(marker in text for marker in ("intel", "amd", "nvidia", "realtek", "oem")):
         return "Hardware/OEM"
     return "Third-party/Unknown"
 
