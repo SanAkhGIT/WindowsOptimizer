@@ -1,6 +1,5 @@
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QCheckBox,QComboBox,QGridLayout,QGroupBox,QHBoxLayout,QLabel,QLineEdit,QMessageBox,QPushButton,QScrollArea,QVBoxLayout,QWidget
-from core.system_info import is_admin
 from modules.software import CATALOG,install_selected
 
 class SoftwarePanel(QWidget):
@@ -55,7 +54,7 @@ class SoftwarePanel(QWidget):
         self.selected_ids.update(app.id for app in self._visible()); self._render()
 
     def select_screenshot_essentials(self):
-        ids={"Google.Chrome","Valve.Steam","9WZDNCRFJ3TJ","qBittorrent.qBittorrent","Spotify.Spotify","Microsoft.PowerShell","Microsoft.OneNote"}
+        ids={"Google.Chrome","Valve.Steam","9WZDNCRFJ3TJ","qBittorrent.qBittorrent","Spotify.Spotify","Microsoft.PowerShell","ElementLabs.LMStudio","Stremio.Stremio","AppWork.JDownloader","9N9WCLWDQS5J"}
         self.selected_ids.update(ids); self._render()
 
     def clear(self):
@@ -64,7 +63,6 @@ class SoftwarePanel(QWidget):
     def install(self):
         selected=[app.id for app in CATALOG if app.id in self.selected_ids]
         if not selected: return QMessageBox.information(self,"Nothing selected","Select at least one application.")
-        if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run Windows Optimizer as Administrator to install applications.")
         names=[app.name for app in CATALOG if app.id in selected]
         answer=QMessageBox.question(self,"Install selected applications",f"Install {len(names)} application(s)?\n\n"+"\n".join(f"• {name}" for name in names))
         if answer != QMessageBox.StandardButton.Yes: return
