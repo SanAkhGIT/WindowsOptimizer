@@ -130,7 +130,10 @@ class BackupManager:
         overwrite unrelated settings.
         """
         _require_windows()
-        wanted = {tuple(item) for item in selectors}
+        wanted = {
+            _selector(item) if isinstance(item, dict) else tuple(item)
+            for item in selectors
+        }
         entries = [
             entry for entry in self._load_manifest(path)
             if _selector(entry) in wanted
