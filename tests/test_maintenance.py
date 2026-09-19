@@ -8,6 +8,7 @@ def test_daily_maintenance_contains_safe_operations():
         maintenance.memory_health,
         maintenance.storage_health,
         maintenance.hardware_health,
+        maintenance.windows_management_health,
     ]
     assert all(callable(operation) for operation in operations)
 
