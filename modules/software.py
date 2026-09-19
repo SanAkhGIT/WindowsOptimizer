@@ -36,7 +36,7 @@ CATALOG = [
     AppSpec("Notepad++.Notepad++","Notepad++","Development","Open-source advanced text editor.",foss=True),
     AppSpec("Microsoft.VisualStudioCode","Visual Studio Code","Development","Extensible source-code editor."),
     AppSpec("Git.Git","Git","Development","Distributed version-control system.",foss=True),
-    AppSpec("Python.Python.3.13","Python 3.13","Development","Python runtime for development and automation.",foss=True),
+    AppSpec("Python.Python.3","Python 3","Development","Python runtime for development and automation.",foss=True),
     AppSpec("Microsoft.PowerShell","PowerShell","Development","Modern PowerShell."),
     AppSpec("Microsoft.WindowsTerminal","Windows Terminal","Development","Modern terminal host for Windows.",foss=True),
     AppSpec("WinMerge.WinMerge","WinMerge","Development","Open-source file and folder comparison tool.",foss=True),
