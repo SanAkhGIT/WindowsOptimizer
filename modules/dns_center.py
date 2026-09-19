@@ -13,8 +13,20 @@ def _ps(script, timeout=90):
     return run_executable("powershell.exe", ("-NoProfile", "-NonInteractive", "-EncodedCommand", encoded), timeout)
 
 def inventory():
-    r = _ps("Get-NetIPConfiguration -All | Select-Object InterfaceIndex,InterfaceAlias,IPv4Address,DNSServer | ConvertTo-Json -Depth 4 -Compress")
-    if r.returncode: raise RuntimeError(r.stderr or "DNS inventory failed.")
+    script = r"""
+Get-NetIPConfiguration -All -ErrorAction SilentlyContinue |
+  ForEach-Object {
+    [pscustomobject]@{
+      InterfaceIndex = $_.InterfaceIndex
+      InterfaceAlias = $_.InterfaceAlias
+      IPv4Address = @($_.IPv4Address | ForEach-Object { $_.IPAddress })
+      DNSServer = @($_.DNSServer.ServerAddresses)
+    }
+  } | ConvertTo-Json -Depth 4 -Compress
+"""
+    r = _ps(script)
+    if r.returncode:
+        raise RuntimeError(r.stderr or "DNS inventory failed.")
     return r.stdout or "[]"
 
 def set_preset(index, preset):
