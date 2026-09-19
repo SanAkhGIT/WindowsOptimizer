@@ -8,13 +8,15 @@ from core.profile_manager import (
 )
 from core.configuration import build
 from core.operation_receipts import recent
+from ui.operation_approval import OperationApprovalDialog
 
 
 class ProfileManagerDialog(QDialog):
-    def __init__(self, parent, get_state, apply_profile):
+    def __init__(self, parent, get_state, apply_profile, execute_profile):
         super().__init__(parent)
         self.get_state = get_state
         self.apply_profile = apply_profile
+        self.execute_profile = execute_profile
         self.setWindowTitle("Profile Manager")
         self.resize(720, 560)
 
@@ -122,6 +124,14 @@ class ProfileManagerDialog(QDialog):
         state = self.get_state()
         plan = build_plan(profile, state["tweaks"], state["apps"], state["features"])
         self.details.setPlainText(format_plan(plan))
+        if not plan.items:
+            return
+        dialog = OperationApprovalDialog(
+            self,
+            plan,
+            lambda selected: self.execute_profile(profile, selected),
+        )
+        dialog.exec()
 
     def show_receipts(self):
         entries = recent(limit=12)
