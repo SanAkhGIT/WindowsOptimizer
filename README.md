@@ -15,12 +15,14 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Windows System Restore point integration
 - Background execution for long-running operations and hardware telemetry
 - Operation verification and machine-readable logs
-- Risk/reversibility/restart metadata
-- Taskbar, transparency and wallpaper controls
+- Risk/reversibility/restart metadata with live Applied / Not Applied / Conflict state detection
+- Taskbar, transparency, wallpaper and taskbar End Task controls
 - Windows Game Mode and optional Game DVR control
-- Privacy and DNS maintenance controls
+- Privacy controls for advertising ID, tailored experiences and Windows activity history
+- Essential Windows policy controls with safe conflict detection and owned rollback
 - WinGet software inventory, curated Windows 11 app installer, screenshot-app preset and upgrades
 - JSON profiles: Minimal / Standard / Gaming / Performance
+- AppX package inventory and selective debloat with protected-package safeguards
 - Startup inventory
 - Power-plan inventory and controlled High Performance activation
 - Network adapter/configuration inventory and latency testing
@@ -54,6 +56,7 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Operation logging
 - [x] Verification foundation
 - [ ] Full rollback transactions
+- [x] Owned-policy rollback for new essential tweaks
 - [x] Centralized UI theme and responsive dashboard
 
 ### Windows management
@@ -61,8 +64,9 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Power-plan inventory
 - [x] Network adapter/configuration inventory
 - [x] Latency test
-- [ ] Startup impact analysis and safe disable controls
-- [ ] Services analyzer with conservative recommendations
+- [x] Startup impact analysis foundation
+- [x] Services analyzer with conservative recommendations
+- [ ] Safe service/startup editors with per-item rollback
 - [ ] Network repair workflow
 - [ ] Windows Update center
 
@@ -71,8 +75,10 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Curated installation
 - [x] Upgrade All
 - [ ] Uninstall UI
-- [ ] Selective debloat
-- [ ] Reinstall/restore paths
+- [x] AppX inventory and selective debloat
+- [x] AppX protected-package classification
+- [x] Existing-package registration recovery path
+- [ ] WinGet/AppX restore catalog
 
 ### Gaming
 - [x] Game Mode
@@ -102,6 +108,7 @@ The project takes broad feature inspiration from established Windows utilities s
 
 ### Profiles & automation
 - [x] JSON profile foundation
+- [x] Standard profile expanded with conservative privacy/UI baseline
 - [ ] Import/export
 - [ ] Dry-run preview
 - [ ] Apply report
