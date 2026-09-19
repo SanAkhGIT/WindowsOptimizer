@@ -50,3 +50,34 @@ def test_execute_approved_plan_rejects_empty_selection():
         assert "No approved operations" in str(exc)
     else:
         raise AssertionError("Expected empty approval to be rejected.")
+
+
+def test_execute_approved_plan_persists_rollback_keys(monkeypatch, tmp_path):
+    class Backup:
+        def create(self):
+            return tmp_path / "backup"
+
+    tweak = SimpleNamespace(
+        id="demo_tweak",
+        apply=lambda: "changed",
+        check=lambda: True,
+        rollback=None,
+        metadata={
+            "rollback_keys": (
+                {"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"},
+            )
+        },
+    )
+    profile = SimpleNamespace(id="demo", version=1)
+    monkeypatch.setattr(execution, "_tweak_map", lambda: {"demo_tweak": tweak})
+    monkeypatch.setattr(execution, "verify_tweak", lambda item: (True, "verified"))
+
+    item = SimpleNamespace(kind="tweak", action="enable", identifier="demo_tweak", reason="test")
+    result = execution.execute_approved_plan(
+        profile, [item], backup_manager=Backup(), receipt_root=tmp_path
+    )
+
+    assert result.items[0].rollback_supported is True
+    assert result.items[0].rollback_keys == (
+        {"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"},
+    )
