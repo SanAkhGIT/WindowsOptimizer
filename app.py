@@ -724,7 +724,7 @@ class MainWindow(QMainWindow):
 
         def worker():
             backup = self.backup.create()
-            return backup, self.executor.apply(selected)
+            return backup, self.executor.apply(selected, backup_path=backup)
 
         self._run_job(
             worker,
