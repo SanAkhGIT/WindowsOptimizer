@@ -32,14 +32,34 @@ def _normalise_list(value):
 
 
 def _extract_address(value):
-    """Return a readable IP address from PowerShell/CIM wrapper objects."""
+    """Return a readable IP/DNS value from strings or PowerShell objects."""
     if isinstance(value, str):
         return value.strip()
     if isinstance(value, dict):
-        for key in ("IPAddress", "Address", "Value", "Name"):
+        for key in (
+            "IPAddress",
+            "IPv4Address",
+            "IPv6Address",
+            "ServerAddresses",
+            "Address",
+            "Value",
+            "Name",
+        ):
             candidate = value.get(key)
             if isinstance(candidate, str) and candidate.strip():
                 return candidate.strip()
+            if isinstance(candidate, list):
+                nested = []
+                for item in candidate:
+                    extracted = _extract_address(item)
+                    if extracted:
+                        nested.append(extracted)
+                if nested:
+                    return ", ".join(nested)
+            if isinstance(candidate, dict):
+                extracted = _extract_address(candidate)
+                if extracted:
+                    return extracted
     return ""
 
 
@@ -47,8 +67,11 @@ def _addresses(value):
     result = []
     for item in _normalise_list(value):
         address = _extract_address(item)
-        if address and address not in result:
-            result.append(address)
+        if address:
+            for candidate in address.split(","):
+                candidate = candidate.strip()
+                if candidate and candidate not in result:
+                    result.append(candidate)
     return result
 
 
@@ -62,10 +85,12 @@ def _network_records(items):
         ipv4 = _addresses(item.get("IPv4Address"))
         ipv6 = _addresses(item.get("IPv6Address"))
         dns = _addresses(item.get("DNSServer"))
+        status = str(item.get("Status") or "").strip()
         records.append(
             {
                 "InterfaceAlias": interface,
                 "InterfaceDescription": description,
+                "Status": status,
                 "IPv4Address": ipv4,
                 "IPv6Address": ipv6,
                 "DNSServer": dns,
@@ -79,7 +104,26 @@ def snapshot():
     script = r"""
 $adapters = @(
     Get-NetIPConfiguration -ErrorAction SilentlyContinue |
-    Select-Object InterfaceAlias,InterfaceDescription,IPv4Address,IPv6Address,DNSServer
+    ForEach-Object {
+        [pscustomobject]@{
+            InterfaceAlias = $_.InterfaceAlias
+            InterfaceDescription = $_.InterfaceDescription
+            Status = $(
+                try {
+                    (Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction Stop).Status
+                } catch {
+                    "Unknown"
+                }
+            )
+            IPv4Address = @($_.IPv4Address | ForEach-Object {
+                if ($_.IPAddress) { $_.IPAddress } elseif ($_.IPv4Address) { $_.IPv4Address } else { "$_" }
+            })
+            IPv6Address = @($_.IPv6Address | ForEach-Object {
+                if ($_.IPAddress) { $_.IPAddress } elseif ($_.IPv6Address) { $_.IPv6Address } else { "$_" }
+            })
+            DNSServer = @($_.DNSServer.ServerAddresses)
+        }
+    }
 )
 $hotfixes = @(Get-HotFix -ErrorAction SilentlyContinue | Select-Object HotFixID,Description,InstalledOn)
 $bios = @(Get-CimInstance Win32_BIOS -ErrorAction SilentlyContinue | Select-Object Manufacturer,SMBIOSBIOSVersion,ReleaseDate,SerialNumber)
