@@ -13,6 +13,7 @@ from modules.repair import explorer,sfc,dism
 from modules.startup import inventory as startup_inventory
 from modules.power import current as power_current, plans as power_plans, set_high_performance
 from modules.network_center import adapters as network_adapters, configuration as network_configuration, latency as network_latency
+from modules.services import inventory as services_inventory
 
 class MainWindow(QMainWindow):
  def __init__(self):
@@ -78,12 +79,13 @@ class MainWindow(QMainWindow):
   info=QLabel("Windows management is primarily diagnostic here. Changes are kept explicit instead of applying broad system-wide presets.")
   info.setWordWrap(True); lay.addWidget(info)
   row=QHBoxLayout()
-  for text,fn in [("Startup Inventory",self.show_startup),("Power Plans",self.show_power),("Network Adapters",self.show_network),("Network Config",self.show_network_config),("Ping 1.1.1.1",self.show_latency)]:
+  for text,fn in [("Startup Inventory",self.show_startup),("Services",self.show_services),("Power Plans",self.show_power),("Network Adapters",self.show_network),("Network Config",self.show_network_config),("Ping 1.1.1.1",self.show_latency)]:
    b=QPushButton(text); b.clicked.connect(fn); row.addWidget(b)
   lay.addLayout(row)
   b=QPushButton("Activate High Performance Power Plan"); b.clicked.connect(self.enable_high_performance); lay.addWidget(b)
   self.tabs.addTab(page,"Windows")
  def show_startup(self): self._run_job(startup_inventory,done=self._show_result,fail=self._show_error)
+ def show_services(self): self._run_job(services_inventory,done=self._show_result,fail=self._show_error)
  def show_power(self): self._run_job(lambda: power_current()+"\n\nAvailable plans:\n"+power_plans(),done=self._show_result,fail=self._show_error)
  def show_network(self): self._run_job(network_adapters,done=self._show_result,fail=self._show_error)
  def show_network_config(self): self._run_job(network_configuration,done=self._show_result,fail=self._show_error)
