@@ -50,7 +50,7 @@ def candidates():
     return [CleanupCandidate(i,n,str(p),_size(p,2 if i=="user_temp" else 14 if i=="crash_dumps" else None),d,r) for i,n,p,d,r in items]
 
 def recycle_bin_status():
-    script = r"""$items=@(Get-ChildItem -LiteralPath 'C:\$Recycle.Bin' -Force -Recurse -ErrorAction SilentlyContinue); [pscustomobject]@{Exists=Test-Path 'C:\$Recycle.Bin';Items=$items.Count;SizeBytes=[int64](($items|Measure-Object Length -Sum).Sum)}|ConvertTo-Json -Compress"""
+    script = r"""$root = Join-Path $env:SystemDrive '$Recycle.Bin'; $items=@(Get-ChildItem -LiteralPath $root -Force -Recurse -ErrorAction SilentlyContinue); [pscustomobject]@{Exists=Test-Path $root;Items=$items.Count;SizeBytes=[int64](($items|Measure-Object Length -Sum).Sum);Path=$root}|ConvertTo-Json -Compress"""
     r=run_executable("powershell.exe",("-NoProfile","-NonInteractive","-Command",script),90)
     if r.returncode: raise RuntimeError(r.stderr or "Recycle Bin analysis failed.")
     return r.stdout or "{}"
