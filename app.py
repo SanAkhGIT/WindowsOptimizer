@@ -421,8 +421,6 @@ class MainWindow(QMainWindow):
         self.admin.setText("Administrator" if is_admin() else "Standard user")
         self.tweaks = all_tweaks()
         self._render_tweaks()
-        if hasattr(self, "appx_panel"):
-            self.appx_panel.scan()
         self.health.setText("● Live dashboard")
         self.activity.success(
             "System scan complete",
@@ -695,6 +693,7 @@ class MainWindow(QMainWindow):
 
     def apply_selected(self):
         if self._busy:
+            self.activity.notice("Another operation is already running. Wait for it to finish.")
             return
         if not is_admin():
             QMessageBox.warning(self, "Administrator required", "Run as Administrator before applying changes.")
@@ -713,23 +712,35 @@ class MainWindow(QMainWindow):
         ) != QMessageBox.StandardButton.Yes:
             return
 
-        try:
-            self.backup.create()
-        except Exception as exc:
-            QMessageBox.critical(self, "Backup failed", str(exc))
-            return
+        def worker():
+            backup = self.backup.create()
+            return backup, self.executor.apply(selected)
 
-        self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
+        self._run_job(
+            worker,
+            done=self._show_apply_bundle,
+            fail=self._show_error,
+            label=f"Apply {len(selected)} selected optimization(s)",
+        )
+
+    def _show_apply_bundle(self, value):
+        backup, results = value
+        self.activity.append(f"BACKUP  {backup}")
+        self._show_apply_results(results)
 
     def _run_job(self, fn, *args, done=None, fail=None, label=None):
         operation = getattr(fn, "__qualname__", repr(fn))
         title = label or operation.split(".")[-1].replace("_", " ").strip().title()
         if self._busy:
+            active = self.activity.operation.text() or "another operation"
+            message = f"Busy: {active} is still running. Wait for it to finish before starting {title}."
             self.logger.warning(
                 "Operation rejected because another job is running | operation=%s",
                 operation,
             )
-            return
+            self.activity.notice(message)
+            self.activity.append(f"WAIT   {message}")
+            return False
         self.logger.info(
             "GUI operation requested | operation=%s | args=%r",
             operation,
@@ -742,25 +753,30 @@ class MainWindow(QMainWindow):
         signals = self.jobs.submit(fn, *args)
         signals.finished.connect(lambda value: self._job_finished(value, done))
         signals.failed.connect(lambda error: self._job_failed(error, fail))
+        return True
 
     def _job_finished(self, value, done):
         self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
+        summary = self._result_summary(value)
+        title = self.activity.operation.text()
+        self.activity.append(f"END    {summary}")
+        self.activity.success(title, summary)
+        self._job_done()
+        # Mark the slot idle before invoking callbacks because several callbacks
+        # intentionally queue a follow-up refresh/verification job.
         if done:
             done(value)
-        summary = self._result_summary(value)
-        self.activity.append(f"END    {summary}")
-        self.activity.success(self.activity.operation.text(), summary)
-        self._job_done()
 
     def _job_failed(self, error, fail):
         self.logger.error("GUI operation failed | error=%s", error)
+        title = self.activity.operation.text()
         self.activity.append(f"ERROR  {error}")
+        self.activity.error(title, error)
+        self._job_done()
         if fail:
             fail(error)
         else:
             self._show_error(error)
-        self.activity.error(self.activity.operation.text(), error)
-        self._job_done()
 
     @staticmethod
     def _result_summary(value):
@@ -1026,13 +1042,22 @@ class MainWindow(QMainWindow):
         )
 
     def _run_update_change(self, fn, *args):
-        try:
+        def worker():
             backup = self.backup.create()
-        except Exception as exc:
-            QMessageBox.critical(self, "Backup failed", str(exc))
-            return
-        self.output.setPlainText(f"WINDOWS UPDATE BACKUP\n{backup}")
-        self._run_job(fn, *args, done=self._show_result, fail=self._show_error)
+            result = fn(*args)
+            return backup, result
+
+        def done(value):
+            backup, result = value
+            self.activity.append(f"BACKUP  {backup}")
+            self._show_result(result)
+
+        self._run_job(
+            worker,
+            done=done,
+            fail=self._show_error,
+            label="Apply Windows Update policy change",
+        )
 
     def pause_quality_updates(self):
         if not is_admin():
