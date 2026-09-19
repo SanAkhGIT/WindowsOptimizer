@@ -7,7 +7,7 @@ from modules.startup_manager import records as startup_records, disable_user_run
 from modules.service_manager import inventory as service_inventory, details as service_details, set_start_mode, restore_start_mode
 from modules.power_center import current as power_current, plans as power_plans
 from modules.dns_center import inventory as dns_inventory
-from modules.storage_center import categories as storage_categories, system_drive as storage_drive
+from modules.storage_center import candidates as storage_categories, system_drive as storage_drive
 
 
 class WindowsManagementPanel(QWidget):
