@@ -1,4 +1,5 @@
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+from core.logging import get_logger, log_exception
 
 
 class JobSignals(QObject):
@@ -17,10 +18,16 @@ class Job(QRunnable):
         self.setAutoDelete(True)
 
     def run(self):
+        logger = get_logger("jobs")
+        operation = getattr(self.fn, "__qualname__", repr(self.fn))
+        logger.info("Job started | operation=%s | args=%r", operation, self.args)
         self.signals.started.emit()
         try:
-            self.signals.finished.emit(self.fn(*self.args, **self.kwargs))
+            result = self.fn(*self.args, **self.kwargs)
+            logger.info("Job finished | operation=%s | result_type=%s", operation, type(result).__name__)
+            self.signals.finished.emit(result)
         except Exception as exc:
+            log_exception(logger, f"Job failed | operation={operation}", exc)
             self.signals.failed.emit(f"{type(exc).__name__}: {exc}")
 
 
