@@ -17,18 +17,33 @@ class Job(QRunnable):
         self.signals = JobSignals()
         self.setAutoDelete(True)
 
+    @staticmethod
+    def _emit(signal, value=None):
+        try:
+            if value is None:
+                signal.emit()
+            else:
+                signal.emit(value)
+        except RuntimeError:
+            return False
+        return True
+
     def run(self):
         logger = get_logger("jobs")
         operation = getattr(self.fn, "__qualname__", repr(self.fn))
         logger.info("Job started | operation=%s | args=%r", operation, self.args)
-        self.signals.started.emit()
+        self._emit(self.signals.started)
         try:
             result = self.fn(*self.args, **self.kwargs)
-            logger.info("Job finished | operation=%s | result_type=%s", operation, type(result).__name__)
-            self.signals.finished.emit(result)
+            logger.info(
+                "Job finished | operation=%s | result_type=%s",
+                operation,
+                type(result).__name__,
+            )
+            self._emit(self.signals.finished, result)
         except Exception as exc:
             log_exception(logger, f"Job failed | operation={operation}", exc)
-            self.signals.failed.emit(f"{type(exc).__name__}: {exc}")
+            self._emit(self.signals.failed, f"{type(exc).__name__}: {exc}")
 
 
 class JobRunner(QObject):
