@@ -25,7 +25,14 @@ def records():
         raise RuntimeError(f"Service inventory returned invalid JSON: {exc}") from exc
     if isinstance(value, dict):
         value = [value]
-    return [{**item, "classification": classify(item), "recommendation": recommendation(item)} for item in value]
+    return [
+        {
+            **item,
+            "classification": classify(item),
+            "recommendation": recommendation(item),
+        }
+        for item in value
+    ]
 
 
 def classify(service):
@@ -33,7 +40,7 @@ def classify(service):
         str(service.get(key, "") or "")
         for key in ("Name", "DisplayName", "PathName", "StartName")
     ).lower()
-    windows_markers = ("microsoft", "\windows\", "windows\")
+    windows_markers = ("microsoft", r"windows\", "windows\")
     if any(marker in text for marker in windows_markers):
         return "Windows"
     if any(marker in text for marker in ("intel", "amd", "nvidia", "realtek", "oem")):
