@@ -1,0 +1,32 @@
+# Developer & Remote Access Center
+
+The Developer Center is intentionally read-first. It inventories WSL, OpenSSH, PowerShell 7, .NET, Git, Windows optional features and Developer Mode, while exposing supported Windows entry points.
+
+## WSL
+
+Microsoft documents `wsl --install` as the supported one-command setup for WSL, enabling required components and installing a default Linux distribution; a restart can be required. The application uses `--no-launch` so installation does not unexpectedly open a distribution.
+
+WSL supports Windows 11 and recent Windows 10 builds, and Microsoft documents `wsl --status` and `wsl --list --verbose` for diagnostics.
+
+## Developer Mode
+
+Microsoft documents Developer Mode under the Windows developer settings. On current Windows 11 releases, the location is under System > Advanced > For developers. Enabling it requires administrator access. Developer Mode can enable additional deployment/debugging features and can configure SSH-related development functionality.
+
+The application does not silently enable Developer Mode.
+
+## OpenSSH
+
+OpenSSH Server is managed through the Windows `sshd` service. The center only starts or stops it after explicit confirmation and administrator checks. It does not rewrite sshd configuration or open arbitrary firewall ports.
+
+## Environment
+
+The center provides direct access to environment variables and Windows Terminal and reports installed Git, PowerShell 7 and .NET where detectable.
+
+## Safety
+
+- no automatic Developer Mode activation
+- no automatic SSH exposure
+- no firewall rule creation
+- no SSH configuration rewriting
+- WSL installation requires explicit confirmation
+- privileged operations require Administrator access
