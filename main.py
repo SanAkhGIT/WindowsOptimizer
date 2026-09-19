@@ -1,7 +1,9 @@
 import sys
 import argparse
 from PySide6.QtWidgets import QApplication
+
 from app import MainWindow
+from ui.theme import apply_theme
 
 
 def _run_maintenance():
@@ -24,6 +26,8 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("Windows Optimizer")
     app.setOrganizationName("WindowsOptimizer")
+    apply_theme(app)
+
     window = MainWindow()
     window.show()
     return app.exec()
