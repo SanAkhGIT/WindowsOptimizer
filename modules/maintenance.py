@@ -9,6 +9,7 @@ import time
 from dataclasses import asdict, dataclass
 from pathlib import Path
 from datetime import datetime, timezone
+import subprocess
 
 import psutil
 
@@ -24,7 +25,7 @@ class MaintenanceResult:
 
 HOURS_OLD_FOR_TEMP = 48
 DAYS_OLD_FOR_DUMPS = 14
-HISTORY_DIR = Path(os.environ.get("LOCALAPPDATA", Path.home())) / "WindowsOptimizer" / "Maintenance"
+HISTORY_DIR = Path(os.environ.get("PROGRAMDATA", Path.home())) / "WindowsOptimizer" / "Maintenance"
 HISTORY_FILE = HISTORY_DIR / "history.jsonl"
 
 
@@ -195,6 +196,50 @@ def hardware_health() -> MaintenanceResult:
     )
 
 
+def _powershell_json(script: str) -> dict | list:
+    result = subprocess.run(
+        ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=30,
+    )
+    if result.returncode:
+        raise RuntimeError(result.stderr.strip() or "PowerShell query failed.")
+    return json.loads(result.stdout or "{}")
+
+
+def windows_management_health() -> MaintenanceResult:
+    data = _powershell_json(
+        """
+        $startup = @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue)
+        $services = @(Get-CimInstance Win32_Service -ErrorAction SilentlyContinue)
+        $reboot = @(
+            Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Component Based Servicing\RebootPending'
+            Test-Path 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\WindowsUpdate\Auto Update\RebootRequired'
+        ) -contains $true
+        [pscustomobject]@{
+            startup_count = $startup.Count
+            service_count = $services.Count
+            disabled_services = @($services | Where-Object {$_.StartMode -eq 'Disabled'}).Count
+            reboot_pending = $reboot
+        } | ConvertTo-Json -Compress
+        """
+    )
+    pending = bool(data.get("reboot_pending"))
+    return MaintenanceResult(
+        "Windows management health",
+        "WARNING" if pending else "OK",
+        (
+            f"Startup entries: {data.get('startup_count', 0)}; "
+            f"services: {data.get('service_count', 0)}; "
+            f"disabled services: {data.get('disabled_services', 0)}; "
+            f"pending reboot: {'Yes' if pending else 'No'}."
+        ),
+        details=data,
+    )
+
 def run_daily_maintenance() -> list[MaintenanceResult]:
     """Run the daily suite. Each operation is isolated so one failure doesn't stop the rest."""
     operations = (
@@ -203,6 +248,7 @@ def run_daily_maintenance() -> list[MaintenanceResult]:
         memory_health,
         storage_health,
         hardware_health,
+        windows_management_health,
     )
     results: list[MaintenanceResult] = []
     for operation in operations:
