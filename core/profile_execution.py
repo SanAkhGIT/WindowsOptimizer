@@ -67,6 +67,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
                 status = "VERIFIED" if verified is True else (
                     "APPLIED" if verified is None else "UNVERIFIED"
                 )
+                rollback_supported = bool(tweak.rollback)
             elif item.kind == "app" and item.action == "install":
                 if item.identifier not in catalog:
                     raise ValueError(f"Unknown catalog application: {item.identifier}")
@@ -78,6 +79,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
                     else "Install completed but WinGet did not report the package as installed."
                 )
                 status = "VERIFIED" if verified else "UNVERIFIED"
+                rollback_supported = False
             elif item.kind == "windows_feature" and item.action == "enable":
                 message = set_feature(item.identifier, True)
                 verified = _feature_enabled(item.identifier)
@@ -87,6 +89,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
                     else "Enable completed but inventory did not report the feature as enabled."
                 )
                 status = "VERIFIED" if verified else "UNVERIFIED"
+                rollback_supported = True
             else:
                 raise ValueError(
                     f"Unsupported approved operation: {item.kind}/{item.action}"
@@ -95,6 +98,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
             message = str(exc)
             verification = f"Operation failed after start at {started}."
             status = "FAILED"
+            rollback_supported = False
 
         receipt_items.append(
             ReceiptItem(
@@ -104,6 +108,7 @@ def execute_approved_plan(profile, items, *, backup_manager=None, receipt_root=N
                 status,
                 message,
                 verification,
+                rollback_supported,
             )
         )
 
