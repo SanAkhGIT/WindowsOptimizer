@@ -417,6 +417,16 @@ class MainWindow(QMainWindow):
             button.setChecked(i == index)
         self.page_title.setText(self.NAV[index][1])
 
+        # AppX inventory is relatively expensive. Load it when the user opens
+        # Debloat instead of occupying the global operation slot at app startup.
+        if (
+            index == 2
+            and hasattr(self, "appx_panel")
+            and not self.appx_panel.packages
+            and not self._busy
+        ):
+            self.appx_panel.scan()
+
     def refresh(self):
         self.admin.setText("Administrator" if is_admin() else "Standard user")
         self.tweaks = all_tweaks()
