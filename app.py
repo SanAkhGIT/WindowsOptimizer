@@ -506,16 +506,33 @@ class MainWindow(QMainWindow):
         self._set_ids([])
 
     def open_profile_manager(self):
+        selected_tweaks = [
+            check.property("tweak_id")
+            for check in self.checks
+            if check.isChecked()
+        ]
+        selected_apps = sorted(getattr(self.software_panel, "selected_ids", set()))
+
         def collect_state():
-            features = [item.name for item in feature_inventory() if "Enabled" in item.state]
+            features = [
+                item.name
+                for item in feature_inventory()
+                if "Enabled" in item.state
+            ]
             return {
-                "tweaks": [c.property("tweak_id") for c in self.checks if c.isChecked()],
-                "apps": sorted(getattr(self.software_panel, "selected_ids", set())),
+                "tweaks": selected_tweaks,
+                "apps": selected_apps,
                 "features": features,
                 "power_plan": power_current(),
                 "maintenance": {},
             }
-        self._run_job(collect_state, done=self._show_profile_manager, fail=self._show_error)
+
+        self._run_job(
+            collect_state,
+            done=self._show_profile_manager,
+            fail=self._show_error,
+            label="Prepare profile manager",
+        )
 
     def _show_profile_manager(self, state):
         def apply_profile(configuration):
@@ -533,6 +550,9 @@ class MainWindow(QMainWindow):
 
         def execute_profile(profile, selected_items):
             if self._busy:
+                self.activity.notice(
+                    "Another operation is already running. Wait for it to finish."
+                )
                 return
             if not is_admin():
                 QMessageBox.warning(
@@ -542,55 +562,116 @@ class MainWindow(QMainWindow):
                 )
                 return
 
-            self.output.setPlainText(
-                f"APPROVED PROFILE EXECUTION\n"
-                f"{profile.name} v{profile.version}\n"
-                f"Executing {len(selected_items)} approved operation(s)..."
-            )
-            selected_ids = {(item.kind, item.identifier) for item in selected_items}
             self._run_job(
-                execute_approved_plan,
-                profile,
-                selected_ids,
-                self.tweaks,
+                lambda: execute_approved_plan(
+                    profile,
+                    selected_items,
+                    backup_manager=self.backup,
+                ),
                 done=self._show_profile_execution,
                 fail=self._show_error,
+                label=f"Execute profile • {profile.name}",
+            )
+
+        def rollback(receipt_path, item_index):
+            self._run_job(
+                rollback_receipt_item,
+                receipt_path,
+                item_index,
+                done=lambda result: self._show_result(
+                    f"ROLLBACK {result.status}\n{result.item.identifier}: "
+                    f"{result.item.message}\nReceipt: {result.receipt_path}"
+                ),
+                fail=self._show_error,
+                label="Rollback selected operation",
+            )
+
+        def restore_backup(path):
+            self._run_job(
+                self.backup.restore,
+                path,
+                done=lambda count: self._show_result(
+                    f"REGISTRY BACKUP RESTORED\n{count} value(s) restored from {path}"
+                ),
+                fail=self._show_error,
+                label="Restore registry backup",
             )
 
         dialog = ProfileManagerDialog(
             self,
-            state,
-            on_apply=apply_profile,
-            on_execute=execute_profile,
+            lambda: state,
+            apply_profile,
+            execute_profile,
+            rollback,
+            restore_backup,
         )
         dialog.exec()
 
+    def _show_profile_execution(self, result):
+        lines = [
+            f"PROFILE EXECUTION {result.status}",
+            f"Backup: {result.backup_path or 'None'}",
+            f"Receipt: {result.receipt_path}",
+            "",
+        ]
+        lines.extend(
+            f"{item.identifier}: {item.status} — {item.message} — {item.verification}"
+            for item in result.items
+        )
+        self.output.setPlainText("\n".join(lines))
+        self.refresh()
+
     def create_backup(self):
-        try:
-            path = self.backup.create()
-            self.output.setPlainText(f"REGISTRY BACKUP CREATED\n{path}")
-            return path
-        except Exception as exc:
-            self._show_error(exc)
+        self._run_job(
+            self.backup.create,
+            done=lambda path: self.output.setPlainText(
+                f"REGISTRY BACKUP CREATED\n{path}"
+            ),
+            fail=self._show_error,
+            label="Create registry backup",
+        )
 
     def export_configuration(self):
-        try:
+        path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Export WindowsOptimizer configuration",
+            "WindowsOptimizer-config.json",
+            "JSON Files (*.json)",
+        )
+        if not path:
+            return
+
+        tweak_ids = [
+            check.property("tweak_id")
+            for check in self.checks
+            if check.isChecked()
+        ]
+        package_ids = sorted(getattr(self.software_panel, "selected_ids", set()))
+
+        def worker():
             configuration = build_configuration(
-                [c.property("tweak_id") for c in self.checks if c.isChecked()],
-                sorted(getattr(self.software_panel, "selected_ids", set())),
-                [item.name for item in feature_inventory() if "Enabled" in item.state],
+                tweak_ids,
+                package_ids,
+                [
+                    item.name
+                    for item in feature_inventory()
+                    if "Enabled" in item.state
+                ],
                 power_current(),
             )
-            path, _ = QFileDialog.getSaveFileName(
-                self, "Export WindowsOptimizer configuration", "WindowsOptimizer-config.json", "JSON Files (*.json)"
-            )
-            if path:
-                save_configuration(path, configuration)
-                winget = Path(path).with_name(Path(path).stem + "-winget.json")
-                export_winget(str(winget))
-                self.output.setPlainText(f"CONFIGURATION EXPORTED\n{path}\n{winget}")
-        except Exception as exc:
-            QMessageBox.critical(self, "Configuration export failed", str(exc))
+            save_configuration(path, configuration)
+            winget = Path(path).with_name(Path(path).stem + "-winget.json")
+            export_winget(str(winget))
+            return path, winget
+
+        self._run_job(
+            worker,
+            done=lambda value: self.output.setPlainText(
+                f"CONFIGURATION EXPORTED\n{value[0]}\n{value[1]}"
+            ),
+            fail=self._show_error,
+            label="Export configuration",
+        )
 
     def import_configuration(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -609,15 +690,41 @@ class MainWindow(QMainWindow):
 
     def review_configuration(self):
         if not hasattr(self, "loaded_configuration"):
-            QMessageBox.information(self, "No configuration loaded", "Import a WindowsOptimizer configuration first.")
+            QMessageBox.information(
+                self,
+                "No configuration loaded",
+                "Import a WindowsOptimizer configuration first.",
+            )
             return
-        self._run_job(self._calculate_configuration_diff, done=self._show_configuration_diff, fail=self._show_error)
-
-    def _calculate_configuration_diff(self):
-        current_tweaks = [c.property("tweak_id") for c in self.checks if c.isChecked()]
+        current_tweaks = [
+            check.property("tweak_id")
+            for check in self.checks
+            if check.isChecked()
+        ]
         current_apps = sorted(getattr(self.software_panel, "selected_ids", set()))
-        enabled_features = [item.name for item in feature_inventory() if "Enabled" in item.state]
-        return compare_configuration(self.loaded_configuration, current_tweaks, current_apps, enabled_features)
+        configuration = dict(self.loaded_configuration)
+        self._run_job(
+            self._calculate_configuration_diff,
+            configuration,
+            current_tweaks,
+            current_apps,
+            done=self._show_configuration_diff,
+            fail=self._show_error,
+            label="Review configuration",
+        )
+
+    def _calculate_configuration_diff(self, configuration, current_tweaks, current_apps):
+        enabled_features = [
+            item.name
+            for item in feature_inventory()
+            if "Enabled" in item.state
+        ]
+        return compare_configuration(
+            configuration,
+            current_tweaks,
+            current_apps,
+            enabled_features,
+        )
 
     def _show_configuration_diff(self, diff):
         lines = ["CONFIGURATION DIFF", "", configuration_summary(diff)]
@@ -640,10 +747,18 @@ class MainWindow(QMainWindow):
 
     def apply_configuration(self):
         if not hasattr(self, "loaded_configuration"):
-            QMessageBox.information(self, "No configuration loaded", "Import a WindowsOptimizer configuration first.")
+            QMessageBox.information(
+                self,
+                "No configuration loaded",
+                "Import a WindowsOptimizer configuration first.",
+            )
             return
         if not is_admin():
-            QMessageBox.warning(self, "Administrator required", "Run as Administrator before applying a configuration.")
+            QMessageBox.warning(
+                self,
+                "Administrator required",
+                "Run as Administrator before applying a configuration.",
+            )
             return
         if QMessageBox.question(
             self,
@@ -652,39 +767,68 @@ class MainWindow(QMainWindow):
             "This will not automatically remove apps, disable features, or roll back tweaks absent from the profile.",
         ) != QMessageBox.StandardButton.Yes:
             return
-        try:
-            self.backup.create()
-        except Exception as exc:
-            QMessageBox.critical(self, "Backup failed", str(exc))
-            return
+
+        configuration = dict(self.loaded_configuration)
+        tweaks = tuple(self.tweaks)
+
         self._run_job(
             self._apply_configuration_worker,
+            configuration,
+            tweaks,
             done=self._show_configuration_apply,
             fail=self._show_error,
+            label="Apply configuration",
         )
 
-    def _apply_configuration_worker(self):
+    def _apply_configuration_worker(self, configuration, tweaks):
         from modules.software import install_selected, CATALOG
-        desired_tweaks = set(self.loaded_configuration.get("tweaks", []))
-        current_tweaks = {c.property("tweak_id") for c in self.checks if c.isChecked()}
-        selected = [t for t in self.tweaks if t.id in desired_tweaks - current_tweaks and t.apply]
-        results = self.executor.apply(selected) if selected else []
-        known_apps = {a.id for a in CATALOG}
-        app_ids = [app_id for app_id in self.loaded_configuration.get("apps", []) if app_id in known_apps]
-        app_result = install_selected(app_ids) if app_ids else "No application packages selected by the profile."
-        enabled = {item.name for item in feature_inventory() if "Enabled" in item.state}
-        feature_result = []
-        if not is_admin():
-            raise RuntimeError("Administrator access is required for Windows feature changes.")
         from modules.windows_features import set_feature
-        for name in self.loaded_configuration.get("windows_features", []):
+
+        backup = self.backup.create()
+        desired_tweaks = set(configuration.get("tweaks", []))
+        selected = []
+        for tweak in tweaks:
+            if tweak.id not in desired_tweaks or not tweak.apply:
+                continue
+            try:
+                already_applied = bool(tweak.check and tweak.check())
+            except Exception:
+                already_applied = False
+            if not already_applied:
+                selected.append(tweak)
+
+        results = (
+            self.executor.apply(selected, backup_path=backup)
+            if selected
+            else []
+        )
+
+        known_apps = {app.id for app in CATALOG}
+        app_ids = [
+            app_id
+            for app_id in configuration.get("apps", [])
+            if app_id in known_apps
+        ]
+        app_result = (
+            install_selected(app_ids)
+            if app_ids
+            else "No application packages selected by the profile."
+        )
+
+        enabled = {
+            item.name
+            for item in feature_inventory()
+            if "Enabled" in item.state
+        }
+        feature_result = []
+        for name in configuration.get("windows_features", []):
             if name not in enabled:
                 feature_result.append(f"{name}: {set_feature(name, True)}")
-        return results, app_result, feature_result
+        return backup, results, app_result, feature_result
 
     def _show_configuration_apply(self, value):
-        results, app_result, feature_result = value
-        lines = ["CONFIGURATION APPLY COMPLETE"]
+        backup, results, app_result, feature_result = value
+        lines = ["CONFIGURATION APPLY COMPLETE", f"Backup: {backup}"]
         lines.extend(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)
         lines.append("\nAPPLICATIONS\n" + app_result)
         lines.append(
