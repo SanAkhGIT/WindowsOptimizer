@@ -83,6 +83,7 @@ class MainWindow(QMainWindow):
         self.executor = Executor()
         self.jobs = JobRunner(self)
         self._busy = False
+        self._operation_serial = 0
         self._build_ui()
         self.refresh()
 
@@ -736,12 +737,27 @@ class MainWindow(QMainWindow):
             args,
         )
         self._busy = True
-        self.busy_label.setText("● Working…")
+        self._operation_serial += 1
+        operation_id = self._operation_serial
+        self.busy_label.setText(f"● Working…  {title}")
         self.activity.start(title)
         self.activity.append(f"START  {title}")
         signals = self.jobs.submit(fn, *args)
-        signals.finished.connect(lambda value: self._job_finished(value, done))
-        signals.failed.connect(lambda error: self._job_failed(error, fail))
+
+        def finished(value):
+            if operation_id != self._operation_serial:
+                self.logger.warning("Ignoring stale operation result | id=%s", operation_id)
+                return
+            self._job_finished(value, done)
+
+        def failed(error):
+            if operation_id != self._operation_serial:
+                self.logger.warning("Ignoring stale operation error | id=%s", operation_id)
+                return
+            self._job_failed(error, fail)
+
+        signals.finished.connect(finished)
+        signals.failed.connect(failed)
 
     def _job_finished(self, value, done):
         self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
