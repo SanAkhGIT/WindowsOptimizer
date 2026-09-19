@@ -93,6 +93,8 @@ def _network_records(items):
                 "InterfaceAlias": interface,
                 "InterfaceDescription": description,
                 "Status": status,
+                "LinkSpeed": str(item.get("LinkSpeed") or "").strip(),
+                "IPv4DefaultGateway": _addresses(item.get("IPv4DefaultGateway")),
                 "IPv4Address": ipv4,
                 "IPv6Address": ipv6,
                 "DNSServer": dns,
@@ -117,6 +119,16 @@ $adapters = @(
                     "Unknown"
                 }
             )
+            LinkSpeed = $(
+                try {
+                    (Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction Stop).LinkSpeed
+                } catch {
+                    "Unknown"
+                }
+            )
+            IPv4DefaultGateway = @($_.IPv4DefaultGateway | ForEach-Object {
+                if ($_.NextHop) { $_.NextHop } else { "$_" }
+            })
             IPv4Address = @($_.IPv4Address | ForEach-Object {
                 if ($_.IPAddress) { $_.IPAddress } elseif ($_.IPv4Address) { $_.IPv4Address } else { "$_" }
             })
