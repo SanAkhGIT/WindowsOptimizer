@@ -1,12 +1,13 @@
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog,
 )
 
 from core.backup import BackupManager
 from core.executor import Executor
 from core.jobs import JobRunner
 from core.profiles import load_profiles
+from core.configuration import build as build_configuration, save as save_configuration, load as load_configuration
 from core.restore import create_restore_point
 from core.system_info import is_admin
 from modules.catalog import all_tweaks
@@ -201,6 +202,8 @@ class MainWindow(QMainWindow):
         for text, fn, primary in (
             ("Backup", self.create_backup, False),
             ("Restore point", self.restore_point, False),
+            ("Export config", self.export_configuration, False),
+            ("Import config", self.import_configuration, False),
             ("Apply selected", self.apply_selected, True),
         ):
             button = QPushButton(text)
@@ -376,6 +379,61 @@ class MainWindow(QMainWindow):
             self.output.setPlainText(f"BACKUP CREATED\n{self.backup.create()}")
         except Exception as exc:
             QMessageBox.critical(self, "Backup failed", str(exc))
+
+    def export_configuration(self):
+        path, _ = QFileDialog.getSaveFileName(
+            self, "Export WindowsOptimizer configuration",
+            str(Path.home() / "WindowsOptimizer-configuration.json"),
+            "WindowsOptimizer configuration (*.json)",
+        )
+        if not path:
+            return
+        tweak_ids = [c.property("tweak_id") for c in self.checks if c.isChecked()]
+        package_ids = sorted(getattr(self.software_panel, "selected_ids", set()))
+        def collect():
+            features = [item.name for item in feature_inventory() if "Enabled" in item.state]
+            return build_configuration(tweak_ids, package_ids, features, power_current())
+        self._run_job(collect, done=lambda data: self._save_configuration(path, data), fail=self._show_error)
+
+    def _save_configuration(self, path, data):
+        try:
+            saved = save_configuration(path, data)
+            self.output.setPlainText(
+                f"CONFIGURATION EXPORTED\n{saved}\n"
+                f"Tweaks: {len(data['tweaks'])} • Apps: {len(data['apps'])} • "
+                f"Enabled features captured: {len(data['windows_features'])}"
+            )
+        except Exception as exc:
+            self._show_error(str(exc))
+
+    def import_configuration(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, "Import WindowsOptimizer configuration", "",
+            "WindowsOptimizer configuration (*.json)",
+        )
+        if not path:
+            return
+        try:
+            data = load_configuration(path)
+            known_tweaks = {t.id for t in self.tweaks}
+            requested_tweaks = set(data.get("tweaks", []))
+            from modules.software import CATALOG
+            known_apps = {app.id for app in CATALOG}
+            requested_apps = set(data.get("apps", []))
+            self._set_ids(requested_tweaks & known_tweaks)
+            self.software_panel.selected_ids = requested_apps & known_apps
+            self.software_panel._render()
+            unknown = sorted((requested_tweaks - known_tweaks) | (requested_apps - known_apps))
+            self.output.setPlainText(
+                f"CONFIGURATION LOADED FOR REVIEW\n{path}\n"
+                f"Tweaks selected: {len(requested_tweaks & known_tweaks)} • "
+                f"Apps selected: {len(requested_apps & known_apps)}\n"
+                f"Captured enabled Windows features: {len(data.get('windows_features', []))}\n"
+                f"Unknown/removed entries ignored: {len(unknown)}\n\n"
+                "Nothing has been applied or installed. Review the selections, then use the explicit Apply/Install actions."
+            )
+        except Exception as exc:
+            QMessageBox.critical(self, "Configuration import failed", str(exc))
 
     def restore_point(self):
         if not is_admin():
