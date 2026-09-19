@@ -1,9 +1,10 @@
-from PySide6.QtWidgets import QMainWindow, QPushButton, QStackedWidget, QWidget, QVBoxLayout
+from PySide6.QtWidgets import QApplication, QMainWindow, QPushButton, QStackedWidget, QWidget, QVBoxLayout
 
 from app import MainWindow
 
 
 def test_operation_control_gate_disables_all_pages_and_restores_state():
+    app = QApplication.instance() or QApplication([])
     window = QMainWindow()
     stack = QStackedWidget()
     page_one = QWidget()
@@ -24,6 +25,7 @@ def test_operation_control_gate_disables_all_pages_and_restores_state():
     MainWindow._set_page_controls_enabled(window, False)
     assert not first.isEnabled()
     assert not second.isEnabled()
+    app.processEvents()
 
     MainWindow._set_page_controls_enabled(window, True)
     assert first.isEnabled()
