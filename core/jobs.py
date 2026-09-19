@@ -52,8 +52,19 @@ class JobRunner(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.pool = QThreadPool.globalInstance()
+        # Keep Job/JobSignals alive until the worker has delivered its terminal
+        # signal. QThreadPool may auto-delete QRunnable immediately after run(),
+        # while Qt signal connections can still be waiting to dispatch.
+        self._active_jobs = set()
 
     def submit(self, fn, *args, **kwargs):
         job = Job(fn, *args, **kwargs)
+        self._active_jobs.add(job)
+
+        def release(*_args):
+            self._active_jobs.discard(job)
+
+        job.signals.finished.connect(release)
+        job.signals.failed.connect(release)
         self.pool.start(job)
         return job.signals
