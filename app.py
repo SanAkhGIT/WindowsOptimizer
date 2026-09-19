@@ -1202,3 +1202,16 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         self._run_job(dism, done=self._show_result, fail=self._show_error)
+
+    def closeEvent(self, event):
+        """Stop UI-owned timers and ignore late worker callbacks during shutdown."""
+        self._closing = True
+        self._operation_serial += 1
+        self._busy = False
+        if hasattr(self, "dashboard"):
+            for timer_name in ("timer", "sensor_timer"):
+                timer = getattr(self.dashboard, timer_name, None)
+                if timer is not None:
+                    timer.stop()
+        self.logger.info("Main window closing")
+        event.accept()
