@@ -1,6 +1,6 @@
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QStackedWidget, QTextEdit, QVBoxLayout, QWidget,
+    QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog,
 )
 
 from core.backup import BackupManager
@@ -20,6 +20,9 @@ from modules.repair import dism, explorer, sfc
 from modules.services import inventory as services_inventory
 from modules.software import installed_apps, upgrade_all
 from modules.startup import inventory as startup_inventory
+from modules.windows_features import inventory as feature_inventory, set_feature
+from modules.windows_update import status as update_status, reset_components
+from modules.repair_center import component_store_check, component_store_scan, component_store_restore
 from ui.appx import AppxPanel
 from ui.browser_extensions import BrowserExtensionsPanel
 from ui.maintenance import MaintenancePanel
@@ -254,6 +257,27 @@ class MainWindow(QMainWindow):
         high = QPushButton("Activate High Performance power plan")
         high.clicked.connect(self.enable_high_performance)
         layout.addWidget(high)
+
+        feature = QPushButton("Windows Optional Features inventory")
+        feature.clicked.connect(self.show_features)
+        layout.addWidget(feature)
+
+        enable_feature = QPushButton("Enable exact Windows feature")
+        enable_feature.clicked.connect(lambda: self.change_feature(True))
+        layout.addWidget(enable_feature)
+
+        disable_feature = QPushButton("Disable exact Windows feature")
+        disable_feature.clicked.connect(lambda: self.change_feature(False))
+        layout.addWidget(disable_feature)
+
+        update = QPushButton("Windows Update status")
+        update.clicked.connect(self.show_update_status)
+        layout.addWidget(update)
+
+        reset_update = QPushButton("Reset Windows Update components")
+        reset_update.clicked.connect(self.reset_windows_update)
+        layout.addWidget(reset_update)
+
         layout.addStretch()
         self.stack.addWidget(page)
 
@@ -274,6 +298,8 @@ class MainWindow(QMainWindow):
         for text, fn in (
             ("Restart Explorer", self.repair_explorer),
             ("Run SFC /scannow", self.repair_sfc),
+            ("DISM CheckHealth", self.repair_dism_check),
+            ("DISM ScanHealth", self.repair_dism_scan),
             ("Run DISM RestoreHealth", self.repair_dism),
         ):
             button = QPushButton(text)
@@ -498,6 +524,74 @@ class MainWindow(QMainWindow):
 
     def repair_explorer(self):
         self._run_job(explorer, done=self._show_result, fail=self._show_error)
+
+    def show_features(self):
+        self._run_job(feature_inventory, done=self._show_features, fail=self._show_error)
+
+    def _show_features(self, features):
+        enabled = [f for f in features if "Enabled" in f.state]
+        self.output.setPlainText(
+            "WINDOWS OPTIONAL FEATURES\n"
+            + f"{len(features)} feature(s) • {len(enabled)} currently enabled\n\n"
+            + "\n".join(
+                f"{f.name} | {f.display_name} | {f.state}"
+                + (" | restart" if f.restart_required else "")
+                for f in features[:120]
+            )
+        )
+
+    def change_feature(self, enable):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        name, accepted = QInputDialog.getText(
+            self,
+            "Windows Optional Feature",
+            "Enter the exact FeatureName returned by inventory:",
+        )
+        if not accepted or not name.strip():
+            return
+        action = "Enable" if enable else "Disable"
+        if QMessageBox.question(
+            self,
+            f"{action} feature",
+            f"{action} '{name.strip()}'? A restart may be required.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(
+            set_feature,
+            name.strip(),
+            enable,
+            done=self._show_result,
+            fail=self._show_error,
+        )
+
+    def show_update_status(self):
+        self._run_job(update_status, done=self._show_result, fail=self._show_error)
+
+    def reset_windows_update(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        if QMessageBox.question(
+            self,
+            "Reset Windows Update",
+            "Stop Windows Update services and rename their cache folders? The original folders are retained for recovery.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(reset_components, done=self._show_result, fail=self._show_error)
+
+    def repair_dism_check(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_job(component_store_check, done=self._show_result, fail=self._show_error)
+
+    def repair_dism_scan(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        self._run_job(component_store_scan, done=self._show_result, fail=self._show_error)
 
     def repair_sfc(self):
         if not is_admin():

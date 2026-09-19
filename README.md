@@ -26,7 +26,9 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Startup inventory
 - Power-plan inventory and controlled High Performance activation
 - Network adapter/configuration inventory and latency testing
-- Repair actions: Explorer, SFC and DISM
+- Windows Optional Features inventory with exact-name enable/disable controls
+- Windows Update service/reboot status and conservative component-cache reset
+- Repair Center: Explorer, SFC, DISM CheckHealth/ScanHealth/RestoreHealth and Windows Update reset
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
 
@@ -68,7 +70,9 @@ The project takes broad feature inspiration from established Windows utilities s
 - [x] Services analyzer with conservative recommendations
 - [ ] Safe service/startup editors with per-item rollback
 - [ ] Network repair workflow
-- [ ] Windows Update center
+- [x] Windows Optional Features inventory and guarded enable/disable
+- [x] Windows Update status and component reset
+- [ ] Full Windows Update policy/update-history center
 
 ### Software
 - [x] WinGet inventory
