@@ -5,6 +5,7 @@ from modules.performance import scan as performance_scan
 from modules.privacy import scan as privacy_scan
 from modules.network import scan as network_scan
 from modules.fixes import scan as fixes_scan
+from tweaks.debloat import scan as debloat_scan
 
 
 def all_tweaks():
@@ -16,4 +17,5 @@ def all_tweaks():
         + privacy_scan()
         + network_scan()
         + fixes_scan()
+        + debloat_scan()
     )
