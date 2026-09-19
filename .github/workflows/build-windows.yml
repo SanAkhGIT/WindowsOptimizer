@@ -12,6 +12,9 @@ concurrency:
 permissions:
   contents: read
 
+env:
+  QT_QPA_PLATFORM: offscreen
+
 jobs:
   build-windows:
     runs-on: windows-latest
