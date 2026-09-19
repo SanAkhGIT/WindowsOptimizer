@@ -62,6 +62,8 @@ class UpdateReport:
 
     @property
     def failed(self) -> int:
+        if self.action != "upgrade":
+            return 0
         return max(0, self.attempted - self.updated)
 
     @property
@@ -94,7 +96,7 @@ def upgrade_report() -> UpdateReport:
     """Scan for upgrades and return a structured count for the UI."""
     output = upgrade_available()
     available = parse_upgrade_count(output)
-    return UpdateReport(available=available, attempted=available, remaining=available, output=output, action="scan")
+    return UpdateReport(available=available, attempted=0, remaining=available, output=output, action="scan")
 
 
 def upgrade_all_report() -> UpdateReport:
