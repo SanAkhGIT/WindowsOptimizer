@@ -112,6 +112,10 @@ class SystemDashboard(QWidget):
         self.network.setWordWrap(True)
         self.network.setTextInteractionFlags(self.network.textInteractionFlags())
         nl.addWidget(self.network)
+        self.network_detail = QLabel("Waiting for configuration…")
+        self.network_detail.setObjectName("muted")
+        self.network_detail.setWordWrap(True)
+        nl.addWidget(self.network_detail)
         details.addWidget(network, 1)
         root.addLayout(details)
 
@@ -268,19 +272,14 @@ class SystemDashboard(QWidget):
         if adapters:
             rows = []
             for item in adapters[:4]:
-                name = item.get("InterfaceAlias") or "Network adapter"
-                addresses = self._values(item.get("IPv4Address"))
+                name = item.get("InterfaceAlias") or item.get("Name") or "Network adapter"
+                ipv4 = self._values(item.get("IPv4Address"))
                 dns = self._values(item.get("DNSServer"))
                 ipv6 = self._values(item.get("IPv6Address"))
-                address_text = ", ".join(addresses) if addresses else "No IPv4"
-                dns_text = ", ".join(dns) if dns else "—"
-                row = f"<b>{name}</b>: {address_text} • DNS {dns_text}"
-                if ipv6:
-                    row += f"<br><small>IPv6: {', '.join(ipv6[:2])}</small>"
-                rows.append(row)
-            self.network.setText("<br>".join(rows))
-        else:
-            self.network.setText("No active network configuration was returned.")
+                gateways = self._values(item.get("IPv4DefaultGateway"))
+                address_text = ", ".join(ipv4) if ipv4 else "No IPv4"
+                row = f"<b>{name}</b>: {address_text}"
+                if gateways: row += f" • GW {
 
         bios = self._first(data.get("bios"))
         board = self._first(data.get("motherboard"))
