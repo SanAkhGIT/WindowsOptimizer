@@ -9,6 +9,7 @@ from core.executor import Executor
 from core.jobs import JobRunner
 from core.profiles import load_profiles
 from core.configuration import build as build_configuration, save as save_configuration, load as load_configuration, export_winget
+from core.configuration_engine import compare as compare_configuration, summary as configuration_summary
 from core.restore import create_restore_point
 from core.system_info import is_admin
 from modules.catalog import all_tweaks
@@ -433,6 +434,7 @@ class MainWindow(QMainWindow):
             return
         try:
             data = load_configuration(path)
+            self.loaded_configuration = data
             known_tweaks = {t.id for t in self.tweaks}
             requested_tweaks = set(data.get("tweaks", []))
             from modules.software import CATALOG
@@ -452,6 +454,78 @@ class MainWindow(QMainWindow):
             )
         except Exception as exc:
             QMessageBox.critical(self, "Configuration import failed", str(exc))
+
+    def review_configuration(self):
+        if not hasattr(self, "loaded_configuration"):
+            QMessageBox.information(self, "No configuration loaded", "Import a WindowsOptimizer configuration first.")
+            return
+        self._run_job(self._calculate_configuration_diff, done=self._show_configuration_diff, fail=self._show_error)
+
+    def _calculate_configuration_diff(self):
+        current_tweaks = [c.property("tweak_id") for c in self.checks if c.isChecked()]
+        current_apps = sorted(getattr(self.software_panel, "selected_ids", set()))
+        enabled_features = [item.name for item in feature_inventory() if "Enabled" in item.state]
+        return compare_configuration(self.loaded_configuration, current_tweaks, current_apps, enabled_features)
+
+    def _show_configuration_diff(self, diff):
+        lines = ["CONFIGURATION DIFF", "", configuration_summary(diff)]
+        if diff.tweak_select: lines.append("Tweaks to select: " + ", ".join(diff.tweak_select))
+        if diff.tweak_clear: lines.append("Tweaks currently selected but not in profile: " + ", ".join(diff.tweak_clear))
+        if diff.apps_install: lines.append("Apps to install/select: " + ", ".join(diff.apps_install))
+        if diff.features_enable: lines.append("Windows features to enable: " + ", ".join(diff.features_enable))
+        if diff.apps_unknown: lines.append("Unknown apps ignored: " + ", ".join(diff.apps_unknown))
+        lines.append("")
+        lines.append("Apply config is additive. It does not automatically disable tweaks, remove apps, or disable Windows features.")
+        self.output.setPlainText("\n".join(lines))
+
+    def apply_configuration(self):
+        if not hasattr(self, "loaded_configuration"):
+            QMessageBox.information(self, "No configuration loaded", "Import a WindowsOptimizer configuration first.")
+            return
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator before applying a configuration.")
+            return
+        if QMessageBox.question(
+            self, "Apply configuration",
+            "Apply the additive changes from the loaded configuration? A registry backup will be created first.\n\n"
+            "This will not automatically remove apps, disable features, or roll back tweaks absent from the profile."
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            self.backup.create()
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup failed", str(exc))
+            return
+        self._run_job(self._apply_configuration_worker, done=self._show_configuration_apply, fail=self._show_error)
+
+    def _apply_configuration_worker(self):
+        from modules.software import install_selected, CATALOG
+        desired_tweaks = set(self.loaded_configuration.get("tweaks", []))
+        current_tweaks = {c.property("tweak_id") for c in self.checks if c.isChecked()}
+        selected = [t for t in self.tweaks if t.id in desired_tweaks - current_tweaks and t.apply]
+        results = self.executor.apply(selected) if selected else []
+        known_apps = {a.id for a in CATALOG}
+        app_ids = [app_id for app_id in self.loaded_configuration.get("apps", []) if app_id in known_apps]
+        app_result = install_selected(app_ids) if app_ids else "No application packages selected by the profile."
+        enabled = {item.name for item in feature_inventory() if "Enabled" in item.state}
+        feature_result = []
+        if not is_admin():
+            raise RuntimeError("Administrator access is required for Windows feature changes.")
+        from modules.windows_features import set_feature
+        for name in self.loaded_configuration.get("windows_features", []):
+            if name not in enabled:
+                feature_result.append(f"{name}: {set_feature(name, True)}")
+        return results, app_result, feature_result
+
+    def _show_configuration_apply(self, value):
+        results, app_result, feature_result = value
+        lines = ["CONFIGURATION APPLY COMPLETE"]
+        lines.extend(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)
+        lines.append("\nAPPLICATIONS\n" + app_result)
+        lines.append("\nWINDOWS FEATURES\n" + ("\n".join(feature_result) if feature_result else "No feature changes required."))
+        lines.append("\nNo subtractive changes were made automatically.")
+        self.output.setPlainText("\n".join(lines))
+        self.refresh()
 
     def restore_point(self):
         if not is_admin():
