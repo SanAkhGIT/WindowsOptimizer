@@ -135,14 +135,14 @@ def ensure_winget() -> None:
 
 def installed_apps() -> str:
     ensure_winget()
-    output, code = _winget(["list","--accept-source-agreements"],120)
+    output, code = _winget(["list","--accept-source-agreements","--disable-interactivity"],120)
     if code and not output:
         raise RuntimeError("WinGet inventory unavailable.")
     return output
 
 def installed(package_id: str, source: str = "winget") -> bool:
     ensure_winget()
-    args=["list","--id",package_id,"--exact","--accept-source-agreements"]
+    args=["list","--id",package_id,"--exact","--accept-source-agreements","--disable-interactivity"]
     if source: args += ["--source",source]
     output, code = _winget(args,60)
     lowered=output.lower()
@@ -155,20 +155,32 @@ def install(package_id: str) -> str:
     if spec is None:
         raise ValueError("Package is not in the curated Windows 11 application catalog.")
     ensure_winget()
-    args=["install","--id",spec.id,"--exact","--accept-package-agreements","--accept-source-agreements"]
+    args=["install","--id",spec.id,"--exact","--accept-package-agreements","--accept-source-agreements","--disable-interactivity"]
     if spec.source: args += ["--source",spec.source]
     output,code=_winget(args,600)
     if code: raise RuntimeError(output or f"WinGet failed for {spec.name}.")
     return output or f"Installed {spec.name}."
 
 def install_selected(package_ids: Iterable[str]) -> str:
-    ids=list(dict.fromkeys(package_ids))
-    if not ids: return "No applications selected."
-    results=[]
+    ids = list(dict.fromkeys(package_ids))
+    if not ids:
+        return "No applications selected."
+
+    results = []
+    failures = []
     for package_id in ids:
-        try: results.append(f"[OK] {package_id}\n{install(package_id)}")
-        except Exception as exc: results.append(f"[FAILED] {package_id}\n{exc}")
-    return "\n\n".join(results)
+        try:
+            results.append(f"[OK] {package_id}\n{install(package_id)}")
+        except Exception as exc:
+            failures.append(package_id)
+            results.append(f"[FAILED] {package_id}\n{exc}")
+
+    report = "\n\n".join(results)
+    if failures:
+        raise RuntimeError(
+            f"{len(failures)} of {len(ids)} application install(s) failed.\n\n{report}"
+        )
+    return report
 
 def upgrade_available() -> str:
     ensure_winget()
