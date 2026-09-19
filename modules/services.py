@@ -50,7 +50,7 @@ def classify(service):
 
 def recommendation(service):
     if str(service.get("StartMode", "")).lower() == "disabled":
-        return "Already disabled; no action suggested."
+        return "Leave unchanged; already disabled."
     if classify(service) == "Windows":
         return "Leave unchanged unless a specific Windows issue is being diagnosed."
     if classify(service) == "Hardware/OEM":
