@@ -30,6 +30,7 @@ class ReceiptItem:
     message: str = ""
     verification: str = ""
     rollback_supported: bool = False
+    rollback_keys: tuple[dict, ...] = ()
 
 
 @dataclass(frozen=True)
