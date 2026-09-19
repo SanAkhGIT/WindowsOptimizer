@@ -52,11 +52,13 @@ QFrame#card, QGroupBox#card {
     border: 1px solid #202a36;
     border-radius: 14px;
 }
-QFrame#metric {
+QFrame#metric, QFrame#updateStat {
     background: #111821;
     border: 1px solid #202a36;
-    border-radius: 14px;
+    border-radius: 12px;
 }
+QFrame#updateStat { min-width: 150px; }
+QLabel#updateValue { font-size: 17pt; font-weight: 700; color: #f5f8fc; }
 QLabel#muted { color: #8e9aaa; }
 QLabel#title { font-size: 20pt; font-weight: 700; color: #f5f8fc; }
 QLabel#section { font-size: 13pt; font-weight: 650; color: #f5f8fc; }
