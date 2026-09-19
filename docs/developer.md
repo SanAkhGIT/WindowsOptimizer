@@ -42,7 +42,8 @@ Log location:
 Files:
 - `session_<id>.log` — the current application run, including startup, GUI operations, background jobs, subprocess results, registry mutations, backup activity, errors, and uncaught exceptions.
 - `application.log` — rolling longer-term history.
+- `session_<id>_crash.log` — low-level Python fatal-error diagnostics when the platform can capture them.
 
-Session logs are capped with rotation so a broken or unusually noisy operation cannot grow logs without bound. Python's `RotatingFileHandler` is used for bounded log files. The log subsystem is initialized before the GUI starts, and background-job exceptions are logged with tracebacks.
+Session logs are capped with rotation so a broken or unusually noisy operation cannot grow logs without bound. Python's `RotatingFileHandler` is used for bounded log files. The log subsystem is initialized before the GUI starts. Startup records the session and crash-log paths before Qt window construction, and GUI startup is wrapped as a fatal startup boundary so import, Qt initialization, theme setup, and main-window construction failures are logged with tracebacks.
 
 Do not put passwords, API keys, or other secrets into operation arguments or diagnostic messages; diagnostic logging records operation arguments to make failures reproducible.
