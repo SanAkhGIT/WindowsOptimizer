@@ -20,13 +20,10 @@ class Job(QRunnable):
     @staticmethod
     def _emit(signal, value=None):
         try:
-            if value is None:
-                signal.emit()
-            else:
-                signal.emit(value)
+            signal.emit() if value is None else signal.emit(value)
+            return True
         except RuntimeError:
             return False
-        return True
 
     def run(self):
         logger = get_logger("jobs")
@@ -35,11 +32,7 @@ class Job(QRunnable):
         self._emit(self.signals.started)
         try:
             result = self.fn(*self.args, **self.kwargs)
-            logger.info(
-                "Job finished | operation=%s | result_type=%s",
-                operation,
-                type(result).__name__,
-            )
+            logger.info("Job finished | operation=%s | result_type=%s", operation, type(result).__name__)
             self._emit(self.signals.finished, result)
         except Exception as exc:
             log_exception(logger, f"Job failed | operation={operation}", exc)
@@ -47,15 +40,20 @@ class Job(QRunnable):
 
 
 class JobRunner(QObject):
-    """Small shared thread-pool facade for Windows operations and telemetry."""
+    """Shared worker facade.
+
+    A runner owns its jobs until their terminal signal is delivered.  Callers
+    can therefore safely connect UI slots without QRunnable lifetime races.
+    """
 
     def __init__(self, parent=None):
         super().__init__(parent)
         self.pool = QThreadPool.globalInstance()
-        # Keep Job/JobSignals alive until the worker has delivered its terminal
-        # signal. QThreadPool may auto-delete QRunnable immediately after run(),
-        # while Qt signal connections can still be waiting to dispatch.
         self._active_jobs = set()
+
+    @property
+    def active_count(self):
+        return len(self._active_jobs)
 
     def submit(self, fn, *args, **kwargs):
         job = Job(fn, *args, **kwargs)
