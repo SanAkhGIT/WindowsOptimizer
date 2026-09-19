@@ -146,26 +146,30 @@ def reset_components():
     script = r"""
 $ErrorActionPreference = 'Stop'
 $services = 'bits','wuauserv','cryptsvc'
-foreach ($name in $services) {
-  Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
-}
-$stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
-$sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
-$cat = Join-Path $env:SystemRoot 'System32\catroot2'
 $renamed = @()
-if (Test-Path $sd) {
-  $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
-  Rename-Item -LiteralPath $sd -NewName $newSd -ErrorAction Stop
-  $renamed += (Join-Path $env:SystemRoot $newSd)
+try {
+  foreach ($name in $services) {
+    Stop-Service -Name $name -Force -ErrorAction SilentlyContinue
+  }
+  $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
+  $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
+  $cat = Join-Path $env:SystemRoot 'System32\catroot2'
+  if (Test-Path $sd) {
+    $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
+    Rename-Item -LiteralPath $sd -NewName $newSd -ErrorAction Stop
+    $renamed += (Join-Path $env:SystemRoot $newSd)
+  }
+  if (Test-Path $cat) {
+    $newCat = "catroot2.WindowsOptimizer." + $stamp
+    Rename-Item -LiteralPath $cat -NewName $newCat -ErrorAction Stop
+    $renamed += (Join-Path $env:SystemRoot 'System32' $newCat)
+  }
 }
-if (Test-Path $cat) {
-  $newCat = "catroot2.WindowsOptimizer." + $stamp
-  Rename-Item -LiteralPath $cat -NewName $newCat -ErrorAction Stop
-  $renamed += (Join-Path $env:SystemRoot 'System32' $newCat)
+finally {
+  Start-Service -Name cryptsvc -ErrorAction SilentlyContinue
+  Start-Service -Name bits -ErrorAction SilentlyContinue
+  Start-Service -Name wuauserv -ErrorAction SilentlyContinue
 }
-Start-Service -Name cryptsvc -ErrorAction SilentlyContinue
-Start-Service -Name bits -ErrorAction SilentlyContinue
-Start-Service -Name wuauserv -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Message = 'Windows Update caches were renamed; original folders were retained.'
   RetainedPaths = $renamed
