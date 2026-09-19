@@ -19,7 +19,7 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Taskbar, transparency and wallpaper controls
 - Windows Game Mode and optional Game DVR control
 - Privacy and DNS maintenance controls
-- WinGet software inventory, curated installation and upgrades
+- WinGet software inventory, curated Windows 11 app installer, screenshot-app preset and upgrades
 - JSON profiles: Minimal / Standard / Gaming / Performance
 - Startup inventory
 - Power-plan inventory and controlled High Performance activation
@@ -79,6 +79,12 @@ The project takes broad feature inspiration from established Windows utilities s
 - [ ] Hardware-aware gaming profile
 - [ ] Background-process analysis
 - [ ] Before/after benchmark mode
+
+### Software installer
+- WinUtil-style searchable, categorized WinGet application catalog
+- Multi-select installation with exact package IDs and source selection
+- FOSS filter and screenshot-app quick preset (Chrome, Steam, Netflix, qBittorrent, Spotify, PowerShell and OneNote)
+- Microsoft Store packages are explicitly marked instead of being mixed silently with winget packages
 
 ### Browser integrations
 - [x] Bundled Edge extension preparation/installation workflow
