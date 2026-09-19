@@ -63,4 +63,4 @@ def test_update_report_upgrade_failure_count_is_derived_from_attempted():
         action="upgrade",
     )
     assert report.failed == 2
-    assert report.clean
+    assert not report.clean
