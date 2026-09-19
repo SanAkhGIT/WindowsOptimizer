@@ -31,3 +31,25 @@ def test_service_classification():
     assert services.classify({"DisplayName":"Windows Update","PathName":"C:\\Windows\\System32\\svchost.exe"})=="Windows"
     assert services.classify({"DisplayName":"NVIDIA Container","PathName":"C:\\Program Files\\NVIDIA\\x.exe"})=="Hardware/OEM"
     assert services.classify({"DisplayName":"Example Vendor","PathName":"C:\\Program Files\\Example\\x.exe"})=="Third-party/Unknown"
+
+
+def test_network_adapters_return_structured_data(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = '[{"Name":"Ethernet","Status":"Up","LinkSpeed":"1 Gbps"}]'
+        stderr = ""
+    monkeypatch.setattr(network_center, "run_executable", lambda *a, **k: Result())
+    value = network_center.adapters()
+    assert isinstance(value, list)
+    assert value[0]["Name"] == "Ethernet"
+
+
+def test_network_configuration_returns_structured_data(monkeypatch):
+    class Result:
+        returncode = 0
+        stdout = '[{"InterfaceAlias":"Ethernet","IPv4Address":"10.0.0.2"}]'
+        stderr = ""
+    monkeypatch.setattr(network_center, "run_executable", lambda *a, **k: Result())
+    value = network_center.configuration()
+    assert isinstance(value, list)
+    assert value[0]["InterfaceAlias"] == "Ethernet"
