@@ -25,6 +25,7 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Power-plan inventory and controlled High Performance activation
 - Network adapter/configuration inventory and latency testing
 - Repair actions: Explorer, SFC and DISM
+- Managed Microsoft Edge extension installer with bundled Netflix 4K extension
 
 ## Product principles
 
@@ -77,6 +78,11 @@ The project takes broad feature inspiration from established Windows utilities s
 - [ ] Hardware-aware gaming profile
 - [ ] Background-process analysis
 - [ ] Before/after benchmark mode
+
+### Browser integrations
+- [x] Bundled Edge extension preparation/installation workflow
+- [x] Edge extension management page launcher
+- [ ] Extension signature/update verification
 
 ### Profiles & automation
 - [x] JSON profile foundation
