@@ -1,7 +1,7 @@
 from pathlib import Path
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QMainWindow, QMessageBox, QPushButton,
-    QPlainTextEdit, QScrollArea, QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog, QGroupBox,
+    QPlainTextEdit, QScrollArea, QStackedWidget, QTextEdit, QVBoxLayout, QWidget, QInputDialog, QFileDialog, QGroupBox, QSizePolicy,
 )
 
 from core.backup import BackupManager
@@ -163,10 +163,7 @@ class MainWindow(QMainWindow):
 
         self.stack = QStackedWidget()
         self.stack.setObjectName("pageStack")
-        self.stack.setSizePolicy(
-            self.stack.sizePolicy().Policy.Expanding,
-            self.stack.sizePolicy().Policy.Expanding,
-        )
+        self.stack.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
         page_scroll = QScrollArea()
         page_scroll.setObjectName("pageScroll")
         page_scroll.setWidgetResizable(True)
@@ -201,7 +198,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(DeveloperCenterPanel(self.output, self._run_job, is_admin))
         self._build_repairs_page()
         self.stack.addWidget(BrowserExtensionsPanel(self.output))
-        self.stack.addWidget(MaintenancePanel(self.output))
+        self.stack.addWidget(MaintenancePanel(self.output, self._run_job))
 
     def _build_tweaks_page(self):
         from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QScrollArea, QTabWidget
@@ -752,7 +749,6 @@ class MainWindow(QMainWindow):
     def _show_error(self, error):
         self.logger.error("User-visible operation error | %s", error)
         self.output.setPlainText(f"Operation failed:\n{error}")
-        self.activity.error("Operation failed", str(error))
 
     def _show_apply_results(self, results):
         self.output.setPlainText(
