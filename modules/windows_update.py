@@ -33,10 +33,10 @@ $ErrorActionPreference = 'Stop'
 $names = 'wuauserv','bits','cryptsvc'
 $services = Get-Service -Name $names -ErrorAction SilentlyContinue |
   Select-Object Name, Status, StartType
-$pending = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'
-$updatePending = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
-$policy = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate' -ErrorAction SilentlyContinue
-$settings = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\WindowsUpdate\\UpdatePolicy\\Settings' -ErrorAction SilentlyContinue
+$pending = Test-Path 'HKLM:\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'
+$updatePending = Test-Path 'HKLM:\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
+$policy = Get-ItemProperty -Path 'HKLM:\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate' -ErrorAction SilentlyContinue
+$settings = Get-ItemProperty -Path 'HKLM:\SOFTWARE\\Microsoft\\WindowsUpdate\\UpdatePolicy\\Settings' -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Services = $services
   RebootPending = ($pending -or $updatePending)
@@ -131,7 +131,7 @@ foreach ($name in $services) {
 }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
-$cat = Join-Path $env:SystemRoot 'System32\\catroot2'
+$cat = Join-Path $env:SystemRoot 'System32\catroot2'
 $renamed = @()
 if (Test-Path $sd) {
   $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
