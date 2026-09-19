@@ -685,9 +685,9 @@ class MainWindow(QMainWindow):
 
         self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
 
-    def _run_job(self, fn, *args, done=None, fail=None):
+    def _run_job(self, fn, *args, done=None, fail=None, label=None):
         operation = getattr(fn, "__qualname__", repr(fn))
-        title = operation.split(".")[-1].replace("_", " ").strip().title()
+        title = label or operation.split(".")[-1].replace("_", " ").strip().title()
         if self._busy:
             self.logger.warning(
                 "Operation rejected because another job is running | operation=%s",
@@ -897,7 +897,12 @@ class MainWindow(QMainWindow):
         self.software_panel.focus_search()
 
     def upgrade_software(self):
-        self._run_job(upgrade_all, done=self._show_result, fail=self._show_error)
+        self._run_job(
+            upgrade_all,
+            done=self._show_result,
+            fail=self._show_error,
+            label="Upgrade all • WinGet (may take several minutes)",
+        )
 
     def check_updates(self):
         from modules.software import upgrade_available
