@@ -943,6 +943,15 @@ class MainWindow(QMainWindow):
             fail=self._show_error,
         )
 
+    def _run_update_change(self, fn, *args):
+        try:
+            backup = self.backup.create()
+        except Exception as exc:
+            QMessageBox.critical(self, "Backup failed", str(exc))
+            return
+        self.output.setPlainText(f"WINDOWS UPDATE BACKUP\\n{backup}")
+        self._run_job(fn, *args, done=self._show_result, fail=self._show_error)
+
     def pause_quality_updates(self):
         if not is_admin():
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
@@ -952,13 +961,13 @@ class MainWindow(QMainWindow):
             "Pause Windows quality updates for up to 35 days from today?"
         ) != QMessageBox.StandardButton.Yes:
             return
-        self._run_job(pause_quality, done=self._show_result, fail=self._show_error)
+        self._run_update_change(pause_quality)
 
     def resume_quality_updates(self):
         if not is_admin():
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
-        self._run_job(resume_quality, done=self._show_result, fail=self._show_error)
+        self._run_update_change(resume_quality)
 
     def pause_feature_updates(self):
         if not is_admin():
@@ -969,13 +978,13 @@ class MainWindow(QMainWindow):
             "Pause Windows feature updates for up to 35 days from today?"
         ) != QMessageBox.StandardButton.Yes:
             return
-        self._run_job(pause_feature, done=self._show_result, fail=self._show_error)
+        self._run_update_change(pause_feature)
 
     def resume_feature_updates(self):
         if not is_admin():
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
-        self._run_job(resume_feature, done=self._show_result, fail=self._show_error)
+        self._run_update_change(resume_feature)
 
     def set_update_driver_policy(self, enabled):
         if not is_admin():
@@ -987,7 +996,7 @@ class MainWindow(QMainWindow):
             f"{action.title()} driver packages from normal Windows Update quality-update delivery?"
         ) != QMessageBox.StandardButton.Yes:
             return
-        self._run_job(set_driver_exclusion, enabled, done=self._show_result, fail=self._show_error)
+        self._run_update_change(set_driver_exclusion, enabled)
 
     def set_update_target_version(self):
         if not is_admin():
@@ -1003,7 +1012,7 @@ class MainWindow(QMainWindow):
             f"Keep Windows Update on Windows 11 {version.strip()} until this policy is changed?"
         ) != QMessageBox.StandardButton.Yes:
             return
-        self._run_job(set_target_version, version.strip(), done=self._show_result, fail=self._show_error)
+        self._run_update_change(set_target_version, version.strip())
 
     def clear_update_target_version(self):
         if not is_admin():
@@ -1014,7 +1023,7 @@ class MainWindow(QMainWindow):
             "Clear the configured Windows Update target feature version?"
         ) != QMessageBox.StandardButton.Yes:
             return
-        self._run_job(clear_target_version, done=self._show_result, fail=self._show_error)
+        self._run_update_change(clear_target_version)
 
     def show_update_status(self):
         self._run_job(update_status, done=self._show_result, fail=self._show_error)
