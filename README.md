@@ -32,6 +32,7 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Guarded Service Center for startup mode changes
 - DNS Center with DHCP/Cloudflare/Google/Quad9 presets and cache flush
 - Storage analyzer for system-drive and safe cleanup-category sizing
+- Gaming Center with GPU, Game Mode, Game DVR, HAGS and Xbox-service diagnostics
 - Repair Center: Explorer, SFC, DISM CheckHealth/ScanHealth/RestoreHealth and Windows Update reset
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
