@@ -1,4 +1,6 @@
-import winreg
+import pytest
+
+pytest.importorskip("winreg")
 
 import tweaks.essential as essential
 
