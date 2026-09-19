@@ -41,9 +41,12 @@ CATALOG = [
     AppSpec("Microsoft.WindowsTerminal","Windows Terminal","Development","Modern terminal host for Windows.",foss=True),
     AppSpec("WinMerge.WinMerge","WinMerge","Development","Open-source file and folder comparison tool.",foss=True),
     AppSpec("9WZDNCRFJ3TJ","Netflix","Entertainment","Netflix Windows app from Microsoft Store.",source="msstore"),
-    AppSpec("Microsoft.OneNote","OneNote","Productivity","Microsoft OneNote desktop application."),
     AppSpec("TheDocumentFoundation.LibreOffice","LibreOffice","Productivity","Open-source office suite.",foss=True),
     AppSpec("Microsoft.Teams","Microsoft Teams","Productivity","Microsoft collaboration and meetings app."),
+    AppSpec("ElementLabs.LMStudio","LM Studio","AI","Local LLM desktop app for running models on your PC."),
+    AppSpec("Stremio.Stremio","Stremio","Media","Windows desktop media center."),
+    AppSpec("AppWork.JDownloader","JDownloader 2","Utilities","Download manager with queueing and archive extraction."),
+    AppSpec("9N9WCLWDQS5J","Bluetooth Audio Receiver","Music","Receive Bluetooth audio from paired devices on Windows.",source="msstore"),
 ]
 
 def _winget(args: list[str], timeout: int = 180):
