@@ -19,6 +19,7 @@ class BrowserExtension:
     description: str
     browser: str = "Microsoft Edge"
     requires_developer_mode: bool = True
+    source_url: str = "https://github.com/Pickle-Pixel/netflix-force-4k"
 
 
 CATALOG = (
@@ -73,6 +74,10 @@ def _validate_extension(source: Path) -> dict:
     if not manifest.get("name") or not manifest.get("version"):
         raise RuntimeError("Extension manifest is missing name or version.")
     return manifest
+
+
+def manifest(extension_id: str = "netflix-force-4k") -> dict:
+    return _validate_extension(_source_path(extension_id))
 
 
 def installed_path(extension_id: str = "netflix-force-4k") -> Path:
