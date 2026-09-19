@@ -40,3 +40,27 @@ Some diagnostic text
 No applicable upgrade found.
 """
     assert parse_upgrade_count(output) == 0
+
+
+def test_update_report_scan_has_no_failures():
+    from modules.software import UpdateReport
+
+    report = UpdateReport(available=4, remaining=4, action="scan")
+    assert report.attempted == 0
+    assert report.updated == 0
+    assert report.failed == 0
+    assert not report.clean
+
+
+def test_update_report_upgrade_failure_count_is_derived_from_attempted():
+    from modules.software import UpdateReport
+
+    report = UpdateReport(
+        available=5,
+        updated=3,
+        remaining=2,
+        attempted=5,
+        action="upgrade",
+    )
+    assert report.failed == 2
+    assert report.clean
