@@ -1,32 +1,43 @@
 from pathlib import Path
 from datetime import datetime
 import json
-import winreg
+
+try:
+    import winreg
+except ImportError:  # pragma: no cover - Windows runtime only
+    winreg = None
 
 
 BASE = Path.home() / "WindowsOptimizerBackups"
 
+if winreg is not None:
+    CHECKS = (
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarAl"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Control Panel\Desktop", "WallPaper"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"System\GameConfigStore", "GameDVR_Enabled"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled"),
+        (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings", "TaskbarEndTask"),
+        (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures"),
+        (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities"),
+        (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\System", "UploadUserActivities"),
+        (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SYSTEM\CurrentControlSet\Control\Session Manager", "DisableWpbtExecution"),
+    )
+    ROOTS = {
+        "HKCU": winreg.HKEY_CURRENT_USER,
+        "HKLM": winreg.HKEY_LOCAL_MACHINE,
+    }
+else:
+    CHECKS = ()
+    ROOTS = {}
 
-CHECKS = (
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "TaskbarAl"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Control Panel\Desktop", "WallPaper"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", "EnableTransparency"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\GameBar", "AutoGameModeEnabled"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\GameDVR", "AppCaptureEnabled"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"System\GameConfigStore", "GameDVR_Enabled"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\AdvertisingInfo", "Enabled"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Privacy", "TailoredExperiencesWithDiagnosticDataEnabled"),
-    (winreg.HKEY_CURRENT_USER, "HKCU", r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced\TaskbarDeveloperSettings", "TaskbarEndTask"),
-    (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\CloudContent", "DisableWindowsConsumerFeatures"),
-    (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\System", "PublishUserActivities"),
-    (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SOFTWARE\Policies\Microsoft\Windows\System", "UploadUserActivities"),
-    (winreg.HKEY_LOCAL_MACHINE, "HKLM", r"SYSTEM\CurrentControlSet\Control\Session Manager", "DisableWpbtExecution"),
-)
 
-ROOTS = {
-    "HKCU": winreg.HKEY_CURRENT_USER,
-    "HKLM": winreg.HKEY_LOCAL_MACHINE,
-}
+def _require_windows():
+    if winreg is None:
+        raise RuntimeError("Registry backup is only available on Windows.")
 
 
 def _serialise(value):
@@ -41,11 +52,20 @@ def _deserialise(data):
     return data.get("value")
 
 
+def _selector(entry):
+    return (
+        entry.get("root"),
+        entry.get("key"),
+        entry.get("value_name"),
+    )
+
+
 class BackupManager:
     def __init__(self, base=None):
         self.base = Path(base or BASE)
 
     def create(self):
+        _require_windows()
         path = self.base / datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
         path.mkdir(parents=True, exist_ok=False)
 
@@ -66,9 +86,9 @@ class BackupManager:
                         "value": _serialise(value),
                         "value_type": value_type,
                     })
-                    legacy[f"{root}:{key}:{value_name}"] = value
+                    legacy[f"{root_name}:{key}:{value_name}"] = value
             except FileNotFoundError:
-                legacy[f"{root}:{key}:{value_name}"] = None
+                legacy[f"{root_name}:{key}:{value_name}"] = None
             manifest.append(entry)
 
         (path / "registry_manifest.json").write_text(
@@ -79,19 +99,48 @@ class BackupManager:
             json.dumps(legacy, indent=2, default=str),
             encoding="utf-8",
         )
+        (path / "backup.json").write_text(
+            json.dumps(
+                {
+                    "format_version": 2,
+                    "kind": "WindowsOptimizer registry backup",
+                    "created_utc": datetime.now().astimezone().isoformat(),
+                    "entry_count": len(manifest),
+                },
+                indent=2,
+            ),
+            encoding="utf-8",
+        )
         return path
 
-    def restore(self, path):
-        path = Path(path)
-        manifest_path = path / "registry_manifest.json"
+    def _load_manifest(self, path):
+        manifest_path = Path(path) / "registry_manifest.json"
         if not manifest_path.exists():
             raise ValueError("This backup does not contain a restorable registry manifest.")
-
         entries = json.loads(manifest_path.read_text(encoding="utf-8"))
+        if not isinstance(entries, list):
+            raise ValueError("Registry manifest is invalid.")
+        return entries
+
+    def restore_entries(self, path, selectors):
+        """Restore only the captured registry entries named by selectors.
+
+        This is the operation-level recovery primitive. It intentionally does
+        not restore the entire manifest, so a single rollback cannot silently
+        overwrite unrelated settings.
+        """
+        _require_windows()
+        wanted = {tuple(item) for item in selectors}
+        entries = [
+            entry for entry in self._load_manifest(path)
+            if _selector(entry) in wanted
+        ]
+        if len(entries) != len(wanted):
+            raise ValueError("The backup does not contain every requested rollback entry.")
+
         restored = 0
         for entry in entries:
-            root_name = entry.get("root")
-            root = ROOTS.get(root_name)
+            root = ROOTS.get(entry.get("root"))
             key = entry.get("key")
             value_name = entry.get("value_name")
             if root is None or not key or not value_name:
@@ -114,3 +163,8 @@ class BackupManager:
                     pass
             restored += 1
         return restored
+
+    def restore(self, path):
+        return self.restore_entries(path, [
+            _selector(entry) for entry in self._load_manifest(path)
+        ])
