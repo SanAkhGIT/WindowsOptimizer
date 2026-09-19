@@ -85,6 +85,7 @@ class MainWindow(QMainWindow):
         self._busy = False
         self._operation_serial = 0
         self._closing = False
+        self._operation_control_states = {}
         self._build_ui()
         self.refresh()
 
@@ -721,14 +722,31 @@ class MainWindow(QMainWindow):
         self._run_job(self.executor.apply, selected, done=self._show_apply_results, fail=self._show_error)
 
     def _set_page_controls_enabled(self, enabled):
-        """Gate page actions while one global operation is active."""
-        page = self.stack.currentWidget() if hasattr(self, "stack") else None
-        if page is None:
+        """Gate page actions globally and restore each button's prior state."""
+        if not hasattr(self, "stack"):
             return
-        for button in page.findChildren(QPushButton):
-            if button.objectName() in {"nav", "activityToggle"}:
+
+        if not enabled:
+            self._operation_control_states = {}
+            for index in range(self.stack.count()):
+                page = self.stack.widget(index)
+                if page is None:
+                    continue
+                for button in page.findChildren(QPushButton):
+                    if button.objectName() in {"nav", "activityToggle"}:
+                        continue
+                    self._operation_control_states[button] = button.isEnabled()
+                    button.setEnabled(False)
+            return
+
+        states = self._operation_control_states
+        self._operation_control_states = {}
+        for button, was_enabled in states.items():
+            try:
+                button.setEnabled(was_enabled)
+            except RuntimeError:
+                # The page may have been destroyed while an operation was running.
                 continue
-            button.setEnabled(enabled)
 
     def _run_job(self, fn, *args, done=None, fail=None, label=None):
         operation = getattr(fn, "__qualname__", repr(fn))
@@ -836,6 +854,7 @@ class MainWindow(QMainWindow):
 
     def _job_done(self):
         self._busy = False
+        self._set_page_controls_enabled(True)
         self.busy_label.setText("● Ready")
 
     def _show_result(self, value):
