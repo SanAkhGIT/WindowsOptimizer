@@ -9,14 +9,16 @@ from core.profile_manager import (
 from core.configuration import build
 from core.operation_receipts import recent
 from ui.operation_approval import OperationApprovalDialog
+from ui.recovery import RecoveryDialog
 
 
 class ProfileManagerDialog(QDialog):
-    def __init__(self, parent, get_state, apply_profile, execute_profile):
+    def __init__(self, parent, get_state, apply_profile, execute_profile, rollback):
         super().__init__(parent)
         self.get_state = get_state
         self.apply_profile = apply_profile
         self.execute_profile = execute_profile
+        self.rollback = rollback
         self.setWindowTitle("Profile Manager")
         self.resize(720, 560)
 
@@ -134,17 +136,8 @@ class ProfileManagerDialog(QDialog):
         dialog.exec()
 
     def show_receipts(self):
-        entries = recent(limit=12)
-        if not entries:
-            self.details.setPlainText("No execution receipts recorded yet.")
-            return
-        lines = ["RECENT EXECUTION RECEIPTS", ""]
-        for path, receipt in entries:
-            lines.append(
-                f"{receipt.created_utc} | {receipt.status} | "
-                f"{receipt.profile_id or 'manual'} | {len(receipt.items)} item(s) | {path.name}"
-            )
-        self.details.setPlainText("\n".join(lines))
+        dialog = RecoveryDialog(self, self.rollback)
+        dialog.exec()
 
     def delete_selected(self):
         profile = self._selected()
