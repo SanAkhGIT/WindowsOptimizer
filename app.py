@@ -27,7 +27,17 @@ from modules.services import inventory as services_inventory
 from modules.software import installed_apps, upgrade_all
 from modules.startup import inventory as startup_inventory
 from modules.windows_features import inventory as feature_inventory, set_feature
-from modules.windows_update import (\n    status as update_status, reset_components, pause_quality, pause_feature,\n    resume_quality, resume_feature, set_driver_exclusion, set_target_version,\n    clear_target_version,\n)
+from modules.windows_update import (
+    status as update_status,
+    reset_components,
+    pause_quality,
+    pause_feature,
+    resume_quality,
+    resume_feature,
+    set_driver_exclusion,
+    set_target_version,
+    clear_target_version,
+)
 from modules.dns_center import inventory as dns_inventory, flush as dns_flush, set_preset as set_dns_preset, PRESETS as DNS_PRESETS
 from modules.storage_center import categories as storage_categories, system_drive as storage_drive
 from modules.service_manager import inventory as service_inventory, set_start_mode
@@ -416,6 +426,7 @@ class MainWindow(QMainWindow):
                 detail.setWordWrap(True)
                 box_layout.addWidget(detail)
                 inner_layout.addWidget(box)
+
                 self.checks.append(check)
 
             inner_layout.addStretch()
@@ -460,8 +471,8 @@ class MainWindow(QMainWindow):
             self.software_panel._render()
             self.loaded_configuration = configuration
             self.output.setPlainText(
-                "PROFILE LOADED FOR REVIEW\\n"
-                "Selections were updated; no Windows changes were applied.\\n\\n"
+                "PROFILE LOADED FOR REVIEW\n"
+                "Selections were updated; no Windows changes were applied.\n\n"
                 "Use the explicit Apply configuration action when you are ready."
             )
 
@@ -477,173 +488,66 @@ class MainWindow(QMainWindow):
                 return
 
             self.output.setPlainText(
-                f"APPROVED PROFILE EXECUTION\\n"
-                f"{profile.name} v{profile.version}\\n"
+                f"APPROVED PROFILE EXECUTION\n"
+                f"{profile.name} v{profile.version}\n"
                 f"Executing {len(selected_items)} approved operation(s)..."
             )
+            selected_ids = {(item.kind, item.identifier) for item in selected_items}
             self._run_job(
                 execute_approved_plan,
                 profile,
-                selected_items,
+                selected_ids,
+                self.tweaks,
                 done=self._show_profile_execution,
-                fail=self._show_error,
-            )
-
-        def rollback(receipt_path, item_index):
-            if self._busy:
-                return
-            if not is_admin():
-                QMessageBox.warning(
-                    self,
-                    "Administrator required",
-                    "Run Windows Optimizer as Administrator before rollback.",
-                )
-                return
-            self.output.setPlainText(
-                "ROLLBACK IN PROGRESS\\n"
-                "Executing the declared inverse and recording a new receipt..."
-            )
-            self._run_job(
-                rollback_receipt_item,
-                receipt_path,
-                item_index,
-                done=self._show_rollback_result,
-                fail=self._show_error,
-            )
-
-        def restore_backup(backup_path):
-            if self._busy:
-                return
-            if not is_admin():
-                QMessageBox.warning(
-                    self,
-                    "Administrator required",
-                    "Run Windows Optimizer as Administrator before restoring a registry backup.",
-                )
-                return
-            self.output.setPlainText(
-                "REGISTRY BACKUP RESTORE IN PROGRESS\\n"
-                "Restoring the values captured before the selected operation batch..."
-            )
-            self._run_job(
-                self.backup.restore,
-                backup_path,
-                done=lambda count: self._show_result(
-                    f"REGISTRY BACKUP RESTORED\\n{count} captured value(s) processed."
-                ),
                 fail=self._show_error,
             )
 
         dialog = ProfileManagerDialog(
             self,
-            lambda: state,
-            apply_profile,
-            execute_profile,
-            rollback,
-            restore_backup,
+            state,
+            on_apply=apply_profile,
+            on_execute=execute_profile,
         )
         dialog.exec()
 
-    def _show_rollback_result(self, result):
-        self.output.setPlainText(
-            "ROLLBACK COMPLETE\\n"
-            f"Status: {result.status}\\n"
-            f"{result.item.identifier}: {result.item.status} — "
-            f"{result.item.message} — {result.item.verification}\\n"
-            f"Receipt: {result.receipt_path}"
-        )
-        self.refresh()
-
-    def _show_profile_execution(self, result):
-        lines = [
-            "PROFILE EXECUTION COMPLETE",
-            f"Status: {result.status}",
-            f"Backup: {result.backup_path or 'Not created'}",
-            f"Receipt: {result.receipt_path}",
-            "",
-        ]
-        lines.extend(
-            f"{item.identifier}: {item.status} — {item.message} — {item.verification}"
-            for item in result.items
-        )
-        self.output.setPlainText("\\n".join(lines))
-        self.refresh()
-
     def create_backup(self):
         try:
-            self.output.setPlainText(f"BACKUP CREATED\n{self.backup.create()}")
+            path = self.backup.create()
+            self.output.setPlainText(f"REGISTRY BACKUP CREATED\n{path}")
+            return path
         except Exception as exc:
-            QMessageBox.critical(self, "Backup failed", str(exc))
+            self._show_error(exc)
 
     def export_configuration(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export WindowsOptimizer configuration",
-            str(Path.home() / "WindowsOptimizer-configuration.json"),
-            "WindowsOptimizer configuration (*.json)",
-        )
-        if not path:
-            return
-        tweak_ids = [c.property("tweak_id") for c in self.checks if c.isChecked()]
-        package_ids = sorted(getattr(self.software_panel, "selected_ids", set()))
-        def collect():
-            features = [item.name for item in feature_inventory() if "Enabled" in item.state]
-            return build_configuration(tweak_ids, package_ids, features, power_current())
-        self._run_job(collect, done=lambda data: self._save_configuration(path, data), fail=self._show_error)
-
-    def _save_configuration(self, path, data):
         try:
-            saved = save_configuration(path, data)
-            self.output.setPlainText(
-                f"CONFIGURATION EXPORTED\n{saved}\n"
-                f"Tweaks: {len(data['tweaks'])} • Apps: {len(data['apps'])} • "
-                f"Enabled features captured: {len(data['windows_features'])}"
+            configuration = build_configuration(
+                [c.property("tweak_id") for c in self.checks if c.isChecked()],
+                sorted(getattr(self.software_panel, "selected_ids", set())),
+                [item.name for item in feature_inventory() if "Enabled" in item.state],
+                power_current(),
             )
+            path, _ = QFileDialog.getSaveFileName(
+                self, "Export WindowsOptimizer configuration", "WindowsOptimizer-config.json", "JSON Files (*.json)"
+            )
+            if path:
+                save_configuration(path, configuration)
+                winget = Path(path).with_name(Path(path).stem + "-winget.json")
+                export_winget(str(winget))
+                self.output.setPlainText(f"CONFIGURATION EXPORTED\n{path}\n{winget}")
         except Exception as exc:
-            self._show_error(str(exc))
-
-    def export_winget_packages(self):
-        path, _ = QFileDialog.getSaveFileName(
-            self, "Export installed WinGet packages",
-            str(Path.home() / "WindowsOptimizer-winget-export.json"),
-            "WinGet export (*.json)",
-        )
-        if not path:
-            return
-        self._run_job(
-            export_winget, path,
-            done=lambda saved: self.output.setPlainText(
-                f"WINGET PACKAGE EXPORT\n{saved}\n"
-                "Review the package list before importing it on another machine."
-            ),
-            fail=self._show_error,
-        )
+            QMessageBox.critical(self, "Configuration export failed", str(exc))
 
     def import_configuration(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Import WindowsOptimizer configuration", "",
-            "WindowsOptimizer configuration (*.json)",
+            self, "Import WindowsOptimizer configuration", "", "JSON Files (*.json)"
         )
         if not path:
             return
         try:
-            data = load_configuration(path)
-            self.loaded_configuration = data
-            known_tweaks = {t.id for t in self.tweaks}
-            requested_tweaks = set(data.get("tweaks", []))
-            from modules.software import CATALOG
-            known_apps = {app.id for app in CATALOG}
-            requested_apps = set(data.get("apps", []))
-            self._set_ids(requested_tweaks & known_tweaks)
-            self.software_panel.selected_ids = requested_apps & known_apps
-            self.software_panel._render()
-            unknown = sorted((requested_tweaks - known_tweaks) | (requested_apps - known_apps))
+            self.loaded_configuration = load_configuration(path)
             self.output.setPlainText(
                 f"CONFIGURATION LOADED FOR REVIEW\n{path}\n"
-                f"Tweaks selected: {len(requested_tweaks & known_tweaks)} • "
-                f"Apps selected: {len(requested_apps & known_apps)}\n"
-                f"Captured enabled Windows features: {len(data.get('windows_features', []))}\n"
-                f"Unknown/removed entries ignored: {len(unknown)}\n\n"
-                "Nothing has been applied or installed. Review the selections, then use the explicit Apply/Install actions."
+                "No Windows changes were applied. Use Review configuration before applying."
             )
         except Exception as exc:
             QMessageBox.critical(self, "Configuration import failed", str(exc))
@@ -662,13 +566,21 @@ class MainWindow(QMainWindow):
 
     def _show_configuration_diff(self, diff):
         lines = ["CONFIGURATION DIFF", "", configuration_summary(diff)]
-        if diff.tweak_select: lines.append("Tweaks to select: " + ", ".join(diff.tweak_select))
-        if diff.tweak_clear: lines.append("Tweaks currently selected but not in profile: " + ", ".join(diff.tweak_clear))
-        if diff.apps_install: lines.append("Apps to install/select: " + ", ".join(diff.apps_install))
-        if diff.features_enable: lines.append("Windows features to enable: " + ", ".join(diff.features_enable))
-        if diff.apps_unknown: lines.append("Unknown apps ignored: " + ", ".join(diff.apps_unknown))
+        if diff.tweak_select:
+            lines.append("Tweaks to select: " + ", ".join(diff.tweak_select))
+        if diff.tweak_clear:
+            lines.append("Tweaks currently selected but not in profile: " + ", ".join(diff.tweak_clear))
+        if diff.apps_install:
+            lines.append("Apps to install/select: " + ", ".join(diff.apps_install))
+        if diff.features_enable:
+            lines.append("Windows features to enable: " + ", ".join(diff.features_enable))
+        if diff.apps_unknown:
+            lines.append("Unknown apps ignored: " + ", ".join(diff.apps_unknown))
         lines.append("")
-        lines.append("Apply config is additive. It does not automatically disable tweaks, remove apps, or disable Windows features.")
+        lines.append(
+            "Apply config is additive. It does not automatically disable tweaks, remove apps, "
+            "or disable Windows features."
+        )
         self.output.setPlainText("\n".join(lines))
 
     def apply_configuration(self):
@@ -679,9 +591,10 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator before applying a configuration.")
             return
         if QMessageBox.question(
-            self, "Apply configuration",
+            self,
+            "Apply configuration",
             "Apply the additive changes from the loaded configuration? A registry backup will be created first.\n\n"
-            "This will not automatically remove apps, disable features, or roll back tweaks absent from the profile."
+            "This will not automatically remove apps, disable features, or roll back tweaks absent from the profile.",
         ) != QMessageBox.StandardButton.Yes:
             return
         try:
@@ -689,7 +602,11 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Backup failed", str(exc))
             return
-        self._run_job(self._apply_configuration_worker, done=self._show_configuration_apply, fail=self._show_error)
+        self._run_job(
+            self._apply_configuration_worker,
+            done=self._show_configuration_apply,
+            fail=self._show_error,
+        )
 
     def _apply_configuration_worker(self):
         from modules.software import install_selected, CATALOG
@@ -715,7 +632,10 @@ class MainWindow(QMainWindow):
         lines = ["CONFIGURATION APPLY COMPLETE"]
         lines.extend(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)
         lines.append("\nAPPLICATIONS\n" + app_result)
-        lines.append("\nWINDOWS FEATURES\n" + ("\n".join(feature_result) if feature_result else "No feature changes required."))
+        lines.append(
+            "\nWINDOWS FEATURES\n"
+            + ("\n".join(feature_result) if feature_result else "No feature changes required.")
+        )
         lines.append("\nNo subtractive changes were made automatically.")
         self.output.setPlainText("\n".join(lines))
         self.refresh()
@@ -757,9 +677,16 @@ class MainWindow(QMainWindow):
     def _run_job(self, fn, *args, done=None, fail=None):
         operation = getattr(fn, "__qualname__", repr(fn))
         if self._busy:
-            self.logger.warning("Operation rejected because another job is running | operation=%s", operation)
+            self.logger.warning(
+                "Operation rejected because another job is running | operation=%s",
+                operation,
+            )
             return
-        self.logger.info("GUI operation requested | operation=%s | args=%r", operation, args)
+        self.logger.info(
+            "GUI operation requested | operation=%s | args=%r",
+            operation,
+            args,
+        )
         self._busy = True
         self.busy_label.setText("● Working…")
         signals = self.jobs.submit(fn, *args)
@@ -812,16 +739,26 @@ class MainWindow(QMainWindow):
         )
 
     def show_power_center(self):
-        self._run_job(lambda: power_current() + "\n\n" + power_plans(), done=self._show_result, fail=self._show_error)
+        self._run_job(
+            lambda: power_current() + "\n\n" + power_plans(),
+            done=self._show_result,
+            fail=self._show_error,
+        )
 
     def change_power_plan(self):
         if not is_admin():
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         plan, ok = QInputDialog.getItem(
-            self, "Power plan", "Plan:", ["Balanced", "Power saver", "High performance"], 0, False
+            self,
+            "Power plan",
+            "Plan:",
+            ["Balanced", "Power saver", "High performance"],
+            0,
+            False,
         )
-        if not ok: return
+        if not ok:
+            return
         if QMessageBox.question(self, "Confirm power plan", f"Activate {plan}?") != QMessageBox.StandardButton.Yes:
             return
         self._run_job(activate_power, plan, done=self._show_result, fail=self._show_error)
@@ -837,10 +774,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         name, ok = QInputDialog.getText(self, "Service startup", "Exact service Name:")
-        if not ok or not name.strip(): return
-        mode, ok = QInputDialog.getItem(self, "Startup mode", "Mode:", ["Automatic", "Manual", "Disabled"], 1, False)
-        if not ok: return
-        if QMessageBox.question(self, "Confirm service change", f"Set '{name.strip()}' to {mode}?") != QMessageBox.StandardButton.Yes:
+        if not ok or not name.strip():
+            return
+        mode, ok = QInputDialog.getItem(
+            self, "Startup mode", "Mode:", ["Automatic", "Manual", "Disabled"], 1, False
+        )
+        if not ok:
+            return
+        if QMessageBox.question(
+            self,
+            "Confirm service change",
+            f"Set '{name.strip()}' to {mode}?",
+        ) != QMessageBox.StandardButton.Yes:
             return
         self._run_job(set_start_mode, name.strip(), mode, done=self._show_result, fail=self._show_error)
 
@@ -852,10 +797,18 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         index, ok = QInputDialog.getInt(self, "DNS interface", "Interface index:", 1, 1, 65535)
-        if not ok: return
-        preset, ok = QInputDialog.getItem(self, "DNS preset", "Preset:", list(DNS_PRESETS), 0, False)
-        if not ok: return
-        if QMessageBox.question(self, "Confirm DNS change", f"Apply '{preset}' to interface {index}?") != QMessageBox.StandardButton.Yes:
+        if not ok:
+            return
+        preset, ok = QInputDialog.getItem(
+            self, "DNS preset", "Preset:", list(DNS_PRESETS), 0, False
+        )
+        if not ok:
+            return
+        if QMessageBox.question(
+            self,
+            "Confirm DNS change",
+            f"Apply '{preset}' to interface {index}?",
+        ) != QMessageBox.StandardButton.Yes:
             return
         self._run_job(set_dns_preset, index, preset, done=self._show_result, fail=self._show_error)
 
@@ -864,9 +817,17 @@ class MainWindow(QMainWindow):
 
     def show_storage(self):
         def report():
-            drive=storage_drive()
-            items=storage_categories()
-            return "STORAGE\n" + f"System drive: {drive['free']/1024**3:.1f} GB free / {drive['total']/1024**3:.1f} GB\n\n" + "\n".join(f"{x.name}: {x.size_bytes/1024**3:.2f} GB — {x.path}" for x in items)
+            drive = storage_drive()
+            items = storage_categories()
+            return (
+                "STORAGE\n"
+                + f"System drive: {drive['free']/1024**3:.1f} GB free / {drive['total']/1024**3:.1f} GB\n\n"
+                + "\n".join(
+                    f"{x.name}: {x.size_bytes/1024**3:.2f} GB — {x.path}"
+                    for x in items
+                )
+            )
+
         self._run_job(report, done=self._show_result, fail=self._show_error)
 
     def show_network(self):
@@ -958,7 +919,7 @@ class MainWindow(QMainWindow):
         except Exception as exc:
             QMessageBox.critical(self, "Backup failed", str(exc))
             return
-        self.output.setPlainText(f"WINDOWS UPDATE BACKUP\\n{backup}")
+        self.output.setPlainText(f"WINDOWS UPDATE BACKUP\n{backup}")
         self._run_job(fn, *args, done=self._show_result, fail=self._show_error)
 
     def pause_quality_updates(self):
@@ -966,8 +927,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         if QMessageBox.question(
-            self, "Pause quality updates",
-            "Pause Windows quality updates for up to 35 days from today?"
+            self,
+            "Pause quality updates",
+            "Pause Windows quality updates for up to 35 days from today?",
         ) != QMessageBox.StandardButton.Yes:
             return
         self._run_update_change(pause_quality)
@@ -983,8 +945,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Pause feature updates", "Run as Administrator.")
             return
         if QMessageBox.question(
-            self, "Pause feature updates",
-            "Pause Windows feature updates for up to 35 days from today?"
+            self,
+            "Pause feature updates",
+            "Pause Windows feature updates for up to 35 days from today?",
         ) != QMessageBox.StandardButton.Yes:
             return
         self._run_update_change(pause_feature)
@@ -1001,8 +964,9 @@ class MainWindow(QMainWindow):
             return
         action = "exclude" if enabled else "allow"
         if QMessageBox.question(
-            self, "Windows Update drivers",
-            f"{action.title()} driver packages from normal Windows Update quality-update delivery?"
+            self,
+            "Windows Update drivers",
+            f"{action.title()} driver packages from normal Windows Update quality-update delivery?",
         ) != QMessageBox.StandardButton.Yes:
             return
         self._run_update_change(set_driver_exclusion, enabled)
@@ -1017,8 +981,9 @@ class MainWindow(QMainWindow):
         if not ok or not version.strip():
             return
         if QMessageBox.question(
-            self, "Target feature version",
-            f"Keep Windows Update on Windows 11 {version.strip()} until this policy is changed?"
+            self,
+            "Target feature version",
+            f"Keep Windows Update on Windows 11 {version.strip()} until this policy is changed?",
         ) != QMessageBox.StandardButton.Yes:
             return
         self._run_update_change(set_target_version, version.strip())
@@ -1028,8 +993,9 @@ class MainWindow(QMainWindow):
             QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
             return
         if QMessageBox.question(
-            self, "Clear target version",
-            "Clear the configured Windows Update target feature version?"
+            self,
+            "Clear target version",
+            "Clear the configured Windows Update target feature version?",
         ) != QMessageBox.StandardButton.Yes:
             return
         self._run_update_change(clear_target_version)
