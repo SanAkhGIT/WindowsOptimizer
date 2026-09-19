@@ -15,7 +15,7 @@ class SoftwarePanel(QWidget):
         self.category=QComboBox(); self.category.addItem("All categories"); self.category.addItems(sorted({app.category for app in CATALOG})); self.category.currentTextChanged.connect(self._render); controls.addWidget(self.category)
         self.foss=QCheckBox("FOSS only"); self.foss.toggled.connect(self._render); controls.addWidget(self.foss); root.addLayout(controls)
         actions=QHBoxLayout()
-        for text,fn in (("Select Visible",self.select_visible),("Clear",self.clear),("Install Selected",self.install)):
+        for text,fn in (("Screenshot Essentials",self.select_screenshot_essentials),("Select Visible",self.select_visible),("Clear",self.clear),("Install Selected",self.install)):
             b=QPushButton(text); b.clicked.connect(fn); actions.addWidget(b)
         actions.addStretch(); self.count=QLabel(); actions.addWidget(self.count); root.addLayout(actions)
         self.scroll=QScrollArea(); self.scroll.setWidgetResizable(True); self.container=QWidget(); self.grid=QGridLayout(self.container); self.grid.setAlignment(Qt.AlignmentFlag.AlignTop); self.scroll.setWidget(self.container); root.addWidget(self.scroll)
@@ -39,6 +39,12 @@ class SoftwarePanel(QWidget):
         selected=sum(1 for check in self.checks.values() if check.isChecked()); self.count.setText(f"{selected} selected • {len(visible)} shown")
     def select_visible(self):
         for app in self._visible(): self.checks[app.id].setChecked(True)
+        self._render()
+    def select_screenshot_essentials(self):
+        ids={"Google.Chrome","Valve.Steam","9WZDNCRFJ3TJ","qBittorrent.qBittorrent","Spotify.Spotify","Microsoft.PowerShell","Microsoft.OneNote"}
+        for app in CATALOG:
+            if app.id in ids:
+                self.checks[app.id].setChecked(True)
         self._render()
     def clear(self):
         for check in self.checks.values(): check.setChecked(False)
