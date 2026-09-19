@@ -36,3 +36,11 @@ def test_receipt_without_new_rollback_metadata_still_loads(tmp_path):
 
     assert receipt.items[0].rollback_supported is True
     assert receipt.items[0].rollback_keys == ()
+
+
+def test_backup_selector_accepts_receipt_metadata():
+    from core.backup import _selector
+
+    entry = {"root": "HKCU", "key": r"Software\Demo", "value_name": "Enabled"}
+
+    assert _selector(entry) == ("HKCU", r"Software\Demo", "Enabled")
