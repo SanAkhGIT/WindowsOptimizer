@@ -7,6 +7,7 @@ blocking is performed.
 from __future__ import annotations
 
 from datetime import date
+import re
 import base64
 import winreg
 
@@ -105,9 +106,7 @@ def set_driver_exclusion(enabled=True):
 
 def set_target_version(version, product="Windows 11"):
     version = str(version).strip()
-    if not version or len(version) > 32 or any(ch not in "0123456789." for ch in version):
-        raise ValueError("Enter a valid Windows target version such as 25H2.")
-    if not version.upper().endswith(("H1", "H2")):
+    if not re.fullmatch(r"\\d{2}H[12]", version.upper()):
         raise ValueError("Target version must use a Windows release label such as 25H2.")
     _ensure_admin()
     write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "TargetReleaseVersion", 1)
