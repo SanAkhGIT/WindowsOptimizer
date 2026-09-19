@@ -22,6 +22,10 @@ from modules.software import installed_apps, upgrade_all
 from modules.startup import inventory as startup_inventory
 from modules.windows_features import inventory as feature_inventory, set_feature
 from modules.windows_update import status as update_status, reset_components
+from modules.dns_center import inventory as dns_inventory, flush as dns_flush, set_preset as set_dns_preset, PRESETS as DNS_PRESETS
+from modules.storage_center import categories as storage_categories, system_drive as storage_drive
+from modules.service_manager import inventory as service_inventory, set_start_mode
+from modules.power_center import activate as activate_power, battery_report
 from modules.repair_center import component_store_check, component_store_scan, component_store_restore
 from ui.appx import AppxPanel
 from ui.browser_extensions import BrowserExtensionsPanel
@@ -258,6 +262,42 @@ class MainWindow(QMainWindow):
         high.clicked.connect(self.enable_high_performance)
         layout.addWidget(high)
 
+        power = QPushButton("Power plans")
+        power.clicked.connect(self.show_power_center)
+        layout.addWidget(power)
+
+        power_select = QPushButton("Activate supported power plan")
+        power_select.clicked.connect(self.change_power_plan)
+        layout.addWidget(power_select)
+
+        battery = QPushButton("Generate battery report")
+        battery.clicked.connect(self.generate_battery_report)
+        layout.addWidget(battery)
+
+        services = QPushButton("Service inventory")
+        services.clicked.connect(self.show_service_inventory)
+        layout.addWidget(services)
+
+        service_mode = QPushButton("Change service startup mode")
+        service_mode.clicked.connect(self.change_service_mode)
+        layout.addWidget(service_mode)
+
+        dns = QPushButton("DNS inventory")
+        dns.clicked.connect(self.show_dns)
+        layout.addWidget(dns)
+
+        dns_set = QPushButton("Set DNS preset")
+        dns_set.clicked.connect(self.change_dns)
+        layout.addWidget(dns_set)
+
+        dns_flush_button = QPushButton("Flush DNS cache")
+        dns_flush_button.clicked.connect(self.flush_dns)
+        layout.addWidget(dns_flush_button)
+
+        storage = QPushButton("Storage analyzer")
+        storage.clicked.connect(self.show_storage)
+        layout.addWidget(storage)
+
         feature = QPushButton("Windows Optional Features inventory")
         feature.clicked.connect(self.show_features)
         layout.addWidget(feature)
@@ -482,6 +522,64 @@ class MainWindow(QMainWindow):
             done=self._show_result,
             fail=self._show_error,
         )
+
+    def show_power_center(self):
+        self._run_job(lambda: power_current() + "\n\n" + power_plans(), done=self._show_result, fail=self._show_error)
+
+    def change_power_plan(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        plan, ok = QInputDialog.getItem(
+            self, "Power plan", "Plan:", ["Balanced", "Power saver", "High performance"], 0, False
+        )
+        if not ok: return
+        if QMessageBox.question(self, "Confirm power plan", f"Activate {plan}?") != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(activate_power, plan, done=self._show_result, fail=self._show_error)
+
+    def generate_battery_report(self):
+        self._run_job(battery_report, done=self._show_result, fail=self._show_error)
+
+    def show_service_inventory(self):
+        self._run_job(service_inventory, done=self._show_result, fail=self._show_error)
+
+    def change_service_mode(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        name, ok = QInputDialog.getText(self, "Service startup", "Exact service Name:")
+        if not ok or not name.strip(): return
+        mode, ok = QInputDialog.getItem(self, "Startup mode", "Mode:", ["Automatic", "Manual", "Disabled"], 1, False)
+        if not ok: return
+        if QMessageBox.question(self, "Confirm service change", f"Set '{name.strip()}' to {mode}?") != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(set_start_mode, name.strip(), mode, done=self._show_result, fail=self._show_error)
+
+    def show_dns(self):
+        self._run_job(dns_inventory, done=self._show_result, fail=self._show_error)
+
+    def change_dns(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        index, ok = QInputDialog.getInt(self, "DNS interface", "Interface index:", 1, 1, 65535)
+        if not ok: return
+        preset, ok = QInputDialog.getItem(self, "DNS preset", "Preset:", list(DNS_PRESETS), 0, False)
+        if not ok: return
+        if QMessageBox.question(self, "Confirm DNS change", f"Apply '{preset}' to interface {index}?") != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(set_dns_preset, index, preset, done=self._show_result, fail=self._show_error)
+
+    def flush_dns(self):
+        self._run_job(dns_flush, done=self._show_result, fail=self._show_error)
+
+    def show_storage(self):
+        def report():
+            drive=storage_drive()
+            items=storage_categories()
+            return "STORAGE\n" + f"System drive: {drive['free']/1024**3:.1f} GB free / {drive['total']/1024**3:.1f} GB\n\n" + "\n".join(f"{x.name}: {x.size_bytes/1024**3:.2f} GB — {x.path}" for x in items)
+        self._run_job(report, done=self._show_result, fail=self._show_error)
 
     def show_network(self):
         self._run_job(network_adapters, done=self._show_result, fail=self._show_error)

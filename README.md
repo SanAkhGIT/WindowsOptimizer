@@ -28,6 +28,10 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Network adapter/configuration inventory and latency testing
 - Windows Optional Features inventory with exact-name enable/disable controls
 - Windows Update service/reboot status and conservative component-cache reset
+- Power Center with built-in plans and battery report
+- Guarded Service Center for startup mode changes
+- DNS Center with DHCP/Cloudflare/Google/Quad9 presets and cache flush
+- Storage analyzer for system-drive and safe cleanup-category sizing
 - Repair Center: Explorer, SFC, DISM CheckHealth/ScanHealth/RestoreHealth and Windows Update reset
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
