@@ -273,13 +273,27 @@ class SystemDashboard(QWidget):
             rows = []
             for item in adapters[:4]:
                 name = item.get("InterfaceAlias") or item.get("Name") or "Network adapter"
+                status = item.get("Status") or "Unknown"
+                speed = item.get("LinkSpeed") or "Speed unknown"
                 ipv4 = self._values(item.get("IPv4Address"))
-                dns = self._values(item.get("DNSServer"))
                 ipv6 = self._values(item.get("IPv6Address"))
+                dns = self._values(item.get("DNSServer"))
                 gateways = self._values(item.get("IPv4DefaultGateway"))
-                address_text = ", ".join(ipv4) if ipv4 else "No IPv4"
-                row = f"<b>{name}</b>: {address_text}"
-                if gateways: row += f" • GW {
+                row = f"<b>{name}</b> • {status} • {speed}"
+                row += f"<br>IPv4: {', '.join(ipv4) if ipv4 else 'None'}"
+                if gateways:
+                    row += f" • Gateway: {', '.join(gateways)}"
+                if ipv6:
+                    row += f"<br>IPv6: {', '.join(ipv6[:2])}"
+                if dns:
+                    row += f"<br>DNS: {', '.join(dns[:3])}"
+                rows.append(row)
+            self.network.setText("<br><br>".join(rows))
+            self.network_detail.setText(f"{len(adapters)} adapter(s) returned by Windows.")
+        else:
+            self.network.setText("No network adapters returned.")
+            self.network_detail.setText("Windows did not return active network configuration.")
+
 
         bios = self._first(data.get("bios"))
         board = self._first(data.get("motherboard"))
