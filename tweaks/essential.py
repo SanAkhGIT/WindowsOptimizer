@@ -20,19 +20,29 @@ def _state(root, path, name, desired):
 
 def _policy_apply(root, path, name, desired, label):
     current = read_value(root, path, name)
+    key = (root, path, name)
     if current is not None and current[0] != desired:
         return f"Existing {label} policy differs ({current[0]}); no change was made."
+    if current is not None and current[0] == desired:
+        return f"{label} was already configured."
     write_dword(root, path, name, desired)
+    _CHANGED.add(key)
     return f"{label} enabled."
 
 
 def _policy_rollback(root, path, name, desired, label):
+    key = (root, path, name)
+    if key not in _CHANGED:
+        return f"{label} policy was not changed by this operation."
     current = read_value(root, path, name)
     if current is None:
+        _CHANGED.discard(key)
         return f"{label} policy was already not configured."
     if current[0] != desired:
-        return f"{label} policy was not changed by this operation."
+        _CHANGED.discard(key)
+        return f"{label} policy was changed after this operation; it was not overwritten."
     delete_value(root, path, name)
+    _CHANGED.discard(key)
     return f"{label} policy reset to Windows default (not configured)."
 
 
