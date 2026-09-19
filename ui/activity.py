@@ -39,6 +39,11 @@ class ActivityPanel(QFrame):
         self.progress.setMinimumWidth(140)
         status_row.addWidget(self.progress)
 
+        self.clear = QPushButton("Clear")
+        self.clear.setToolTip("Clear diagnostic activity log")
+        self.clear.clicked.connect(self.clear_log)
+        status_row.addWidget(self.clear)
+
         self.toggle = QPushButton("Activity")
         self.toggle.setCheckable(True)
         self.toggle.setObjectName("activityToggle")
@@ -140,6 +145,8 @@ class ActivityPanel(QFrame):
 
     def clear_log(self):
         self.editor.clear()
+        self.summary.clear()
+        self.summary.hide()
 
     def _repolish(self):
         self.state.style().unpolish(self.state)
