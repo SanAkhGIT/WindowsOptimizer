@@ -35,3 +35,18 @@ def test_network_records_accept_strings_and_drop_empty_values():
     assert records[0]["IPv4Address"] == ["192.168.0.20"]
     assert records[0]["IPv6Address"] == []
     assert records[0]["DNSServer"] == ["192.168.0.1", "8.8.8.8"]
+
+
+def test_network_records_handle_nested_address_lists():
+    from modules.system_snapshot import _network_records
+
+    records = _network_records([
+        {
+            "InterfaceAlias": "Ethernet 2",
+            "IPv4Address": {"NetIPAddress": [{"IPAddress": "10.0.0.5"}]},
+            "DNSServer": {"ServerAddresses": ["10.0.0.1"]},
+        }
+    ])
+
+    assert records[0]["IPv4Address"] == ["10.0.0.5"]
+    assert records[0]["DNSServer"] == ["10.0.0.1"]
