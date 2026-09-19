@@ -97,12 +97,27 @@ def install_selected(package_ids: Iterable[str]) -> str:
 
 def upgrade_available() -> str:
     ensure_winget()
-    output,code=_winget(["upgrade","--accept-source-agreements"],120)
-    if code and not output: raise RuntimeError("WinGet upgrade inventory unavailable.")
+    output,code=_winget(
+        ["upgrade","--accept-source-agreements","--disable-interactivity"],
+        120,
+    )
+    if code and not output:
+        raise RuntimeError("WinGet upgrade inventory unavailable.")
     return output
+
 
 def upgrade_all() -> str:
     ensure_winget()
-    output,code=_winget(["upgrade","--all","--accept-package-agreements","--accept-source-agreements"],600)
-    if code and "No applicable upgrade found" not in output: raise RuntimeError(output or "WinGet upgrade failed.")
+    output,code=_winget(
+        [
+            "upgrade",
+            "--all",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+            "--disable-interactivity",
+        ],
+        600,
+    )
+    if code and "No applicable upgrade found" not in output:
+        raise RuntimeError(output or "WinGet upgrade failed.")
     return output or "No applicable upgrades found."
