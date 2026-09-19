@@ -141,7 +141,7 @@ def set_developer_mode(enabled):
     value = "1" if enabled else "0"
     script = (
         "Set-ItemProperty -Path "
-        "'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' "
+        r"'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\AppModelUnlock' "
         f"-Name AllowDevelopmentWithoutDevLicense -Type DWord -Value {value} -Force"
     )
     result = _command(
