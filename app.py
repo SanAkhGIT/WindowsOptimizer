@@ -176,7 +176,18 @@ OPTIMIZER")
             button = QPushButton(text)
             button.clicked.connect(fn)
             controls.addWidget(button)
+
         controls.addStretch()
+        for text, fn, primary in (
+            ("Backup", self.create_backup, False),
+            ("Restore point", self.restore_point, False),
+            ("Apply selected", self.apply_selected, True),
+        ):
+            button = QPushButton(text)
+            if primary:
+                button.setObjectName("primary")
+            button.clicked.connect(fn)
+            controls.addWidget(button)
         layout.addLayout(controls)
 
         self.tweak_tabs = QTabWidget()
