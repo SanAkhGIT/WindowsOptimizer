@@ -58,6 +58,7 @@ class UpdateReport:
     remaining: int = 0
     attempted: int = 0
     output: str = ""
+    action: str = "scan"
 
     @property
     def failed(self) -> int:
@@ -93,7 +94,7 @@ def upgrade_report() -> UpdateReport:
     """Scan for upgrades and return a structured count for the UI."""
     output = upgrade_available()
     available = parse_upgrade_count(output)
-    return UpdateReport(available=available, attempted=available, remaining=available, output=output)
+    return UpdateReport(available=available, attempted=available, remaining=available, output=output, action="scan")
 
 
 def upgrade_all_report() -> UpdateReport:
@@ -120,6 +121,7 @@ def upgrade_all_report() -> UpdateReport:
         remaining=after.available,
         attempted=before.available,
         output=output or "No applicable upgrades found.",
+        action="upgrade",
     )
 
 def _winget(args: list[str], timeout: int = 180):
