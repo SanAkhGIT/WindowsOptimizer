@@ -16,7 +16,7 @@ class ConfigurationDiff:
     apps_unknown: tuple
 
 
-def compare(data, current_tweaks, current_apps, enabled_features):
+def compare(data, current_tweaks, current_apps, enabled_features=()):
     validate(data)
     wanted_tweaks = set(data.get("tweaks", []))
     wanted_apps = set(data.get("apps", []))
