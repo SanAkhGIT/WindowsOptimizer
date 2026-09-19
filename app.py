@@ -266,6 +266,10 @@ class MainWindow(QMainWindow):
         power.clicked.connect(self.show_power_center)
         layout.addWidget(power)
 
+        power_select = QPushButton("Activate supported power plan")
+        power_select.clicked.connect(self.change_power_plan)
+        layout.addWidget(power_select)
+
         battery = QPushButton("Generate battery report")
         battery.clicked.connect(self.generate_battery_report)
         layout.addWidget(battery)
@@ -521,6 +525,18 @@ class MainWindow(QMainWindow):
 
     def show_power_center(self):
         self._run_job(lambda: power_current() + "\n\n" + power_plans(), done=self._show_result, fail=self._show_error)
+
+    def change_power_plan(self):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run as Administrator.")
+            return
+        plan, ok = QInputDialog.getItem(
+            self, "Power plan", "Plan:", ["Balanced", "Power saver", "High performance"], 0, False
+        )
+        if not ok: return
+        if QMessageBox.question(self, "Confirm power plan", f"Activate {plan}?") != QMessageBox.StandardButton.Yes:
+            return
+        self._run_job(activate_power, plan, done=self._show_result, fail=self._show_error)
 
     def generate_battery_report(self):
         self._run_job(battery_report, done=self._show_result, fail=self._show_error)
