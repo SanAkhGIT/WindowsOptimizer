@@ -13,7 +13,7 @@ class ConfigurationDiff:
     apps_install: tuple
     apps_clear: tuple
     features_enable: tuple
-    features_unknown: tuple
+    apps_unknown: tuple
 
 
 def compare(data, current_tweaks, current_apps, enabled_features):
