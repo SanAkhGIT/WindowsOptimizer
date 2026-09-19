@@ -39,6 +39,7 @@ from ui.windows_management import WindowsManagementPanel
 from ui.gaming_center import GamingCenterPanel
 from ui.storage_center import StorageCenterPanel
 from ui.developer_center import DeveloperCenterPanel
+from ui.profile_manager import ProfileManagerDialog
 
 
 class MainWindow(QMainWindow):
@@ -204,6 +205,7 @@ class MainWindow(QMainWindow):
         for text, fn, primary in (
             ("Backup", self.create_backup, False),
             ("Restore point", self.restore_point, False),
+            ("Profile Manager", self.open_profile_manager, False),
             ("Export config", self.export_configuration, False),
             ("Import config", self.import_configuration, False),
             ("Apply selected", self.apply_selected, True),
@@ -375,6 +377,35 @@ class MainWindow(QMainWindow):
 
     def clear_selection(self):
         self._set_ids([])
+
+    def open_profile_manager(self):
+        def collect_state():
+            features = [item.name for item in feature_inventory() if "Enabled" in item.state]
+            return {
+                "tweaks": [c.property("tweak_id") for c in self.checks if c.isChecked()],
+                "apps": sorted(getattr(self.software_panel, "selected_ids", set())),
+                "features": features,
+                "power_plan": power_current(),
+                "maintenance": {},
+            }
+        self._run_job(collect_state, done=self._show_profile_manager, fail=self._show_error)
+
+    def _show_profile_manager(self, state):
+        def apply_profile(configuration):
+            known_tweaks = {t.id for t in self.tweaks}
+            known_apps = {a.id for a in __import__("modules.software", fromlist=["CATALOG"]).CATALOG}
+            self._set_ids(set(configuration.get("tweaks", [])) & known_tweaks)
+            self.software_panel.selected_ids = set(configuration.get("apps", [])) & known_apps
+            self.software_panel._render()
+            self.loaded_configuration = configuration
+            self.output.setPlainText(
+                "PROFILE LOADED FOR REVIEW\\n"
+                "Selections were updated; no Windows changes were applied.\\n\\n"
+                "Use the explicit Apply configuration action when you are ready."
+            )
+
+        dialog = ProfileManagerDialog(self, lambda: state, apply_profile)
+        dialog.exec()
 
     def create_backup(self):
         try:
