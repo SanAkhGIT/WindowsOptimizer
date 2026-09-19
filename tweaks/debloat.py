@@ -11,6 +11,7 @@ from core.registry import delete_value, read_value, write_dword
 
 TASKBAR_ADVANCED = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 DEVICE_METADATA = r"SOFTWARE\Policies\Microsoft\Windows\Device Metadata"
+_CHANGED = set()
 
 
 def _state(root, path, name, desired):
@@ -27,16 +28,23 @@ def _apply(root, path, name, desired, label):
     if current is not None:
         return f"{label} was already configured."
     write_dword(root, path, name, desired)
+    _CHANGED.add((root, path, name))
     return f"{label} enabled."
 
 
 def _rollback(root, path, name, desired, label):
+    key = (root, path, name)
+    if key not in _CHANGED:
+        return f"{label} was not changed by this operation."
     current = read_value(root, path, name)
     if current is None:
+        _CHANGED.discard(key)
         return f"{label} is already at the Windows default."
     if current[0] != desired:
+        _CHANGED.discard(key)
         return f"{label} was changed after this operation; it was not overwritten."
     delete_value(root, path, name)
+    _CHANGED.discard(key)
     return f"{label} reset to Windows default."
 
 
