@@ -50,3 +50,21 @@ def test_network_records_handle_nested_address_lists():
 
     assert records[0]["IPv4Address"] == ["10.0.0.5"]
     assert records[0]["DNSServer"] == ["10.0.0.1"]
+
+
+def test_network_records_preserve_gateway_and_link_speed():
+    records = _network_records(
+        [
+            {
+                "InterfaceAlias": "Ethernet",
+                "Status": "Up",
+                "LinkSpeed": "1 Gbps",
+                "IPv4DefaultGateway": ["192.168.1.1"],
+                "IPv4Address": ["192.168.1.20"],
+            }
+        ]
+    )
+
+    assert records[0]["Status"] == "Up"
+    assert records[0]["LinkSpeed"] == "1 Gbps"
+    assert records[0]["IPv4DefaultGateway"] == ["192.168.1.1"]
