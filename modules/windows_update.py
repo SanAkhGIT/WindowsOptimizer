@@ -33,10 +33,10 @@ $ErrorActionPreference = 'Stop'
 $names = 'wuauserv','bits','cryptsvc'
 $services = Get-Service -Name $names -ErrorAction SilentlyContinue |
   Select-Object Name, Status, StartType
-$pending = Test-Path 'HKLM:SOFTWAREMicrosoftWindowsCurrentVersionComponent Based ServicingRebootPending'
-$updatePending = Test-Path 'HKLM:SOFTWAREMicrosoftWindowsCurrentVersionWindowsUpdateAuto UpdateRebootRequired'
-$policy = Get-ItemProperty -Path 'HKLM:SOFTWAREPoliciesMicrosoftWindowsWindowsUpdate' -ErrorAction SilentlyContinue
-$settings = Get-ItemProperty -Path 'HKLM:SOFTWAREMicrosoftWindowsUpdateUpdatePolicySettings' -ErrorAction SilentlyContinue
+$pending = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\Component Based Servicing\\RebootPending'
+$updatePending = Test-Path 'HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\WindowsUpdate\\Auto Update\\RebootRequired'
+$policy = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Policies\\Microsoft\\Windows\\WindowsUpdate' -ErrorAction SilentlyContinue
+$settings = Get-ItemProperty -Path 'HKLM:\\SOFTWARE\\Microsoft\\WindowsUpdate\\UpdatePolicy\\Settings' -ErrorAction SilentlyContinue
 [pscustomobject]@{
   Services = $services
   RebootPending = ($pending -or $updatePending)
@@ -106,7 +106,7 @@ def set_driver_exclusion(enabled=True):
 
 def set_target_version(version, product="Windows 11"):
     version = str(version).strip()
-    if not re.fullmatch(r"\\d{2}H[12]", version.upper()):
+    if not re.fullmatch(r"\d{2}H[12]", version.upper()):
         raise ValueError("Target version must use a Windows release label such as 25H2.")
     _ensure_admin()
     write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "TargetReleaseVersion", 1)
@@ -131,7 +131,7 @@ foreach ($name in $services) {
 }
 $stamp = Get-Date -Format 'yyyyMMdd-HHmmss'
 $sd = Join-Path $env:SystemRoot 'SoftwareDistribution'
-$cat = Join-Path $env:SystemRoot 'System32catroot2'
+$cat = Join-Path $env:SystemRoot 'System32\\catroot2'
 $renamed = @()
 if (Test-Path $sd) {
   $newSd = "SoftwareDistribution.WindowsOptimizer." + $stamp
