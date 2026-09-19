@@ -10,6 +10,9 @@ from modules.operations import profile_tweaks
 from modules.software import installed_apps,CATALOG,install,upgrade_all
 from modules.updates import scan as scan_updates
 from modules.repair import explorer,sfc,dism
+from modules.startup import inventory as startup_inventory
+from modules.power import current as power_current, plans as power_plans, set_high_performance
+from modules.network_center import adapters as network_adapters, configuration as network_configuration, latency as network_latency
 
 class MainWindow(QMainWindow):
  def __init__(self):
@@ -22,7 +25,7 @@ class MainWindow(QMainWindow):
   for text,fn in [("Scan",self.refresh), ("Backup",self.create_backup), ("Restore Point",self.restore_point), ("Apply Selected",self.apply_selected)]:
    b=QPushButton(text); b.clicked.connect(fn); bar.addWidget(b)
   root.addLayout(bar); self.tabs=QTabWidget(); root.addWidget(self.tabs,1); self.output=QTextEdit(); self.output.setReadOnly(True); self.output.setMaximumHeight(180); root.addWidget(self.output)
-  self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab()
+  self._build_tweaks_tab(); self._build_software_tab(); self._build_updates_tab(); self._build_repairs_tab(); self._build_windows_tab()
  def _build_tweaks_tab(self):
   page=QWidget(); lay=QVBoxLayout(page); controls=QHBoxLayout(); self.profile=QComboBox(); self.profile.addItem("Custom",None)
   for p in load_profiles(): self.profile.addItem(p.get("name",p["id"]),p)
@@ -70,6 +73,25 @@ class MainWindow(QMainWindow):
  def _show_result(self,value): self.output.setPlainText(str(value))
  def _show_error(self,error): self.output.setPlainText(f"Operation failed:\n{error}")
  def _show_apply_results(self,results): self.output.setPlainText("\n".join(f"{r.tweak_id}: {r.status} — {r.message} — {r.verification}" for r in results)); self.refresh()
+ def _build_windows_tab(self):
+  page=QWidget(); lay=QVBoxLayout(page)
+  info=QLabel("Windows management is primarily diagnostic here. Changes are kept explicit instead of applying broad system-wide presets.")
+  info.setWordWrap(True); lay.addWidget(info)
+  row=QHBoxLayout()
+  for text,fn in [("Startup Inventory",self.show_startup),("Power Plans",self.show_power),("Network Adapters",self.show_network),("Network Config",self.show_network_config),("Ping 1.1.1.1",self.show_latency)]:
+   b=QPushButton(text); b.clicked.connect(fn); row.addWidget(b)
+  lay.addLayout(row)
+  b=QPushButton("Activate High Performance Power Plan"); b.clicked.connect(self.enable_high_performance); lay.addWidget(b)
+  self.tabs.addTab(page,"Windows")
+ def show_startup(self): self._run_job(startup_inventory,done=self._show_result,fail=self._show_error)
+ def show_power(self): self._run_job(lambda: power_current()+"\n\nAvailable plans:\n"+power_plans(),done=self._show_result,fail=self._show_error)
+ def show_network(self): self._run_job(network_adapters,done=self._show_result,fail=self._show_error)
+ def show_network_config(self): self._run_job(network_configuration,done=self._show_result,fail=self._show_error)
+ def show_latency(self): self._run_job(network_latency,done=self._show_result,fail=self._show_error)
+ def enable_high_performance(self):
+  if not is_admin(): return QMessageBox.warning(self,"Administrator required","Run as Administrator to change the active power plan.")
+  if QMessageBox.question(self,"Power plan","Activate High Performance for this Windows installation?")!=QMessageBox.StandardButton.Yes:return
+  self._run_job(set_high_performance,done=self._show_result,fail=self._show_error)
  def _build_software_tab(self):
   page=QWidget(); lay=QVBoxLayout(page); buttons=QHBoxLayout()
   for text,fn in [("Installed",self.show_software),("Upgrade All",self.upgrade_software)]: b=QPushButton(text); b.clicked.connect(fn); buttons.addWidget(b)
