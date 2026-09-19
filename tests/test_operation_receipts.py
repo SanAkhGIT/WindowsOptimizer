@@ -58,7 +58,7 @@ def test_manual_executor_receipt_records_backup_and_rollback(monkeypatch, tmp_pa
     results = Executor(log_dir=log_dir).apply([tweak], backup_path=backup_path)
 
     assert results[0].status == "VERIFIED"
-    entries = recent(tmp_path, limit=5)
+    entries = recent(log_dir, limit=5)
     assert entries
     _, receipt = entries[0]
     assert receipt.backup_path == str(backup_path)
