@@ -61,3 +61,30 @@ def test_reset_script_targets_catroot2(monkeypatch):
 
     assert windows_update.reset_components() == "ok"
     assert r"System32\catroot2" in captured[0]
+
+
+def test_pause_quality_writes_iso_date_string(monkeypatch):
+    calls = []
+    monkeypatch.setattr(windows_update, "_ensure_admin", lambda: None)
+    monkeypatch.setattr(
+        windows_update,
+        "write_string",
+        lambda *args: calls.append(args),
+    )
+    windows_update.pause_quality()
+    assert calls
+    assert calls[0][-2] == "PauseQualityUpdatesStartTime"
+    assert len(calls[0][-1]) == 10
+    assert calls[0][-1][4] == "-" and calls[0][-1][7] == "-"
+
+
+def test_pause_feature_writes_iso_date_string(monkeypatch):
+    calls = []
+    monkeypatch.setattr(windows_update, "_ensure_admin", lambda: None)
+    monkeypatch.setattr(
+        windows_update,
+        "write_string",
+        lambda *args: calls.append(args),
+    )
+    windows_update.pause_feature()
+    assert calls[0][-2] == "PauseFeatureUpdatesStartTime"
