@@ -10,6 +10,8 @@ SYSTEM_OS = SYSTEM_POLICY + r"\System"
 PRIVACY = r"Software\Microsoft\Windows\CurrentVersion\Privacy"
 ADVANCED = r"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced"
 
+_CHANGED = set()
+
 
 def _state(root, path, name, desired):
     value = read_value(root, path, name)
@@ -140,12 +142,13 @@ def _tailored_apply():
 
 
 def _tailored_rollback():
-    delete_value(
+    return _policy_rollback(
         winreg.HKEY_CURRENT_USER,
         PRIVACY,
         "TailoredExperiencesWithDiagnosticDataEnabled",
+        0,
+        "Tailored experiences",
     )
-    return "Tailored experiences policy reset to Windows default."
 
 
 def _end_task_state():
@@ -168,12 +171,13 @@ def _end_task_apply():
 
 
 def _end_task_rollback():
-    delete_value(
+    return _policy_rollback(
         winreg.HKEY_CURRENT_USER,
         ADVANCED + r"\TaskbarDeveloperSettings",
         "TaskbarEndTask",
+        1,
+        "Taskbar End Task",
     )
-    return "Taskbar End Task reset to Windows default."
 
 
 def _wpbt_state():
@@ -196,12 +200,13 @@ def _wpbt_apply():
 
 
 def _wpbt_rollback():
-    delete_value(
+    return _policy_rollback(
         winreg.HKEY_LOCAL_MACHINE,
         r"SYSTEM\CurrentControlSet\Control\Session Manager",
         "DisableWpbtExecution",
-    )
-    return "WPBT policy reset to Windows default. A reboot may be required."
+        1,
+        "WPBT execution policy",
+    ) + " A reboot may be required."
 
 
 def scan():
