@@ -33,6 +33,7 @@ from ui.maintenance import MaintenancePanel
 from ui.software import SoftwarePanel
 from ui.system_dashboard import SystemDashboard
 from ui.windows_management import WindowsManagementPanel
+from ui.gaming_center import GamingCenterPanel
 
 
 class MainWindow(QMainWindow):
@@ -43,6 +44,7 @@ class MainWindow(QMainWindow):
         ("▦", "Install Apps"),
         ("↻", "Updates"),
         ("⚙", "Windows"),
+        ("🎮", "Gaming"),
         ("✓", "Fixes"),
         ("◇", "Edge Extensions"),
         ("◷", "Maintenance"),
@@ -158,6 +160,7 @@ class MainWindow(QMainWindow):
         self.stack.addWidget(self.software_panel)
         self._build_updates_page()
         self._build_windows_page()
+        self.stack.addWidget(GamingCenterPanel(self.output, self._run_job))
         self._build_repairs_page()
         self.stack.addWidget(BrowserExtensionsPanel(self.output))
         self.stack.addWidget(MaintenancePanel(self.output))
