@@ -65,6 +65,7 @@ class BackupManager:
         self.base = Path(base or BASE)
 
     def create(self):
+        logger.info("Registry backup requested")
         _require_windows()
         path = self.base / datetime.now().strftime("%Y-%m-%d_%H-%M-%S-%f")
         path.mkdir(parents=True, exist_ok=False)
@@ -111,6 +112,7 @@ class BackupManager:
             ),
             encoding="utf-8",
         )
+        logger.info("Registry backup created | path=%s | entries=%s", path, len(manifest))
         return path
 
     def _load_manifest(self, path):
@@ -141,6 +143,7 @@ class BackupManager:
         if len(entries) != len(wanted):
             raise ValueError("The backup does not contain every requested rollback entry.")
 
+        logger.info("Targeted registry restore requested | backup=%s | entries=%s", path, len(entries))
         restored = 0
         for entry in entries:
             root = ROOTS.get(entry.get("root"))
@@ -165,6 +168,7 @@ class BackupManager:
                 except FileNotFoundError:
                     pass
             restored += 1
+        logger.info("Targeted registry restore completed | backup=%s | restored=%s", path, restored)
         return restored
 
     def restore(self, path):
