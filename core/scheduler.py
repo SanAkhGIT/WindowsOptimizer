@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-TASK_NAME = r"WindowsOptimizer\Daily Maintenance"
+TASK_NAME = "WindowsOptimizer - Daily Maintenance"
 DEFAULT_TIME = "03:00"
 
 
