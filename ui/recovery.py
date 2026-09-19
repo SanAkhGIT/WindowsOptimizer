@@ -7,9 +7,10 @@ from core.operation_receipts import recent
 
 
 class RecoveryDialog(QDialog):
-    def __init__(self, parent, rollback):
+    def __init__(self, parent, rollback, restore_backup):
         super().__init__(parent)
         self.rollback = rollback
+        self.restore_backup = restore_backup
         self.setWindowTitle("Recovery & Receipts")
         self.resize(900, 620)
 
@@ -37,6 +38,10 @@ class RecoveryDialog(QDialog):
         rollback_button.setObjectName("primary")
         rollback_button.clicked.connect(self.rollback_selected)
         buttons.addWidget(rollback_button)
+
+        restore_button = QPushButton("Restore Registry Backup")
+        restore_button.clicked.connect(self.restore_registry_backup)
+        buttons.addWidget(restore_button)
         refresh = QPushButton("Refresh")
         refresh.clicked.connect(self.refresh)
         buttons.addWidget(refresh)
@@ -95,3 +100,21 @@ class RecoveryDialog(QDialog):
         ) != QMessageBox.StandardButton.Yes:
             return
         self.rollback(str(path), item_row)
+
+    def restore_registry_backup(self):
+        receipt_row = self.receipts.currentRow()
+        if receipt_row < 0:
+            QMessageBox.information(self, "Select a receipt", "Select a receipt with a backup first.")
+            return
+        path, receipt = self.entries[receipt_row]
+        if not receipt.backup_path:
+            QMessageBox.information(self, "No backup", "This receipt does not reference a registry backup.")
+            return
+        if QMessageBox.question(
+            self,
+            "Restore registry backup",
+            "Restore the registry values captured before this operation batch? "
+            "This is a broad recovery action and may overwrite changes made after the backup.",
+        ) != QMessageBox.StandardButton.Yes:
+            return
+        self.restore_backup(receipt.backup_path)
