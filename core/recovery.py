@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from core.operation_receipts import ReceiptItem, load, complete, save
+from core.operation_receipts import ReceiptItem, load, complete, save, new_receipt
 from core.backup import BackupManager
 from modules.catalog import all_tweaks
 from modules.windows_features import set_feature
