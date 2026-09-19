@@ -12,6 +12,7 @@ from core.configuration import build as build_configuration, save as save_config
 from core.configuration_engine import compare as compare_configuration, summary as configuration_summary
 from core.restore import create_restore_point
 from core.profile_execution import execute_approved_plan
+from core.recovery import rollback_receipt_item
 from core.system_info import is_admin
 from modules.catalog import all_tweaks
 from modules.network_center import (
@@ -429,13 +430,70 @@ class MainWindow(QMainWindow):
                 fail=self._show_error,
             )
 
+        def rollback(receipt_path, item_index):
+            if self._busy:
+                return
+            if not is_admin():
+                QMessageBox.warning(
+                    self,
+                    "Administrator required",
+                    "Run Windows Optimizer as Administrator before rollback.",
+                )
+                return
+            self.output.setPlainText(
+                "ROLLBACK IN PROGRESS\\n"
+                "Executing the declared inverse and recording a new receipt..."
+            )
+            self._run_job(
+                rollback_receipt_item,
+                receipt_path,
+                item_index,
+                done=self._show_rollback_result,
+                fail=self._show_error,
+            )
+
+        def restore_backup(backup_path):
+            if self._busy:
+                return
+            if not is_admin():
+                QMessageBox.warning(
+                    self,
+                    "Administrator required",
+                    "Run Windows Optimizer as Administrator before restoring a registry backup.",
+                )
+                return
+            self.output.setPlainText(
+                "REGISTRY BACKUP RESTORE IN PROGRESS\\n"
+                "Restoring the values captured before the selected operation batch..."
+            )
+            self._run_job(
+                self.backup.restore,
+                backup_path,
+                done=lambda count: self._show_result(
+                    f"REGISTRY BACKUP RESTORED\\n{count} captured value(s) processed."
+                ),
+                fail=self._show_error,
+            )
+
         dialog = ProfileManagerDialog(
             self,
             lambda: state,
             apply_profile,
             execute_profile,
+            rollback,
+            restore_backup,
         )
         dialog.exec()
+
+    def _show_rollback_result(self, result):
+        self.output.setPlainText(
+            "ROLLBACK COMPLETE\\n"
+            f"Status: {result.status}\\n"
+            f"{result.item.identifier}: {result.item.status} — "
+            f"{result.item.message} — {result.item.verification}\\n"
+            f"Receipt: {result.receipt_path}"
+        )
+        self.refresh()
 
     def _show_profile_execution(self, result):
         lines = [
