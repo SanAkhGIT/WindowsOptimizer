@@ -76,18 +76,23 @@ def _activity_state():
 
 
 def _activity_apply():
-    messages = []
-    for name in ("PublishUserActivities", "UploadUserActivities"):
-        messages.append(
-            _policy_apply(
-                winreg.HKEY_LOCAL_MACHINE,
-                SYSTEM_OS,
-                name,
-                0,
-                name,
-            )
+    names = ("PublishUserActivities", "UploadUserActivities")
+    conflicts = [
+        name
+        for name in names
+        if _state(winreg.HKEY_LOCAL_MACHINE, SYSTEM_OS, name, 0) == "CONFLICT"
+    ]
+    if conflicts:
+        return "Existing activity-history policies differ (" + ", ".join(conflicts) + "); no changes were made."
+    for name in names:
+        _policy_apply(
+            winreg.HKEY_LOCAL_MACHINE,
+            SYSTEM_OS,
+            name,
+            0,
+            name,
         )
-    return "Activity history publishing/upload policies: " + " ".join(messages)
+    return "Activity history publishing and upload disabled."
 
 
 def _activity_rollback():
@@ -115,13 +120,13 @@ def _tailored_state():
 
 
 def _tailored_apply():
-    write_dword(
+    return _policy_apply(
         winreg.HKEY_CURRENT_USER,
         PRIVACY,
         "TailoredExperiencesWithDiagnosticDataEnabled",
         0,
+        "Tailored experiences",
     )
-    return "Tailored experiences based on diagnostic data disabled for the current user."
 
 
 def _tailored_rollback():
@@ -143,13 +148,13 @@ def _end_task_state():
 
 
 def _end_task_apply():
-    write_dword(
+    return _policy_apply(
         winreg.HKEY_CURRENT_USER,
         ADVANCED + r"\TaskbarDeveloperSettings",
         "TaskbarEndTask",
         1,
+        "Taskbar End Task",
     )
-    return "Taskbar End Task enabled."
 
 
 def _end_task_rollback():
@@ -171,13 +176,13 @@ def _wpbt_state():
 
 
 def _wpbt_apply():
-    write_dword(
+    return _policy_apply(
         winreg.HKEY_LOCAL_MACHINE,
         r"SYSTEM\CurrentControlSet\Control\Session Manager",
         "DisableWpbtExecution",
         1,
-    )
-    return "WPBT execution disabled. A reboot may be required."
+        "WPBT execution policy",
+    ) + " A reboot may be required."
 
 
 def _wpbt_rollback():
