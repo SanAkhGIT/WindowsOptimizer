@@ -32,6 +32,7 @@ from ui.browser_extensions import BrowserExtensionsPanel
 from ui.maintenance import MaintenancePanel
 from ui.software import SoftwarePanel
 from ui.system_dashboard import SystemDashboard
+from ui.windows_management import WindowsManagementPanel
 
 
 class MainWindow(QMainWindow):
@@ -232,93 +233,22 @@ class MainWindow(QMainWindow):
     def _build_windows_page(self):
         page = QWidget()
         layout = QVBoxLayout(page)
-        title = QLabel("Windows management")
-        title.setObjectName("section")
-        layout.addWidget(title)
-        info = QLabel(
-            "Diagnostics first. System-wide changes are explicit and guarded "
-            "instead of bundled into a blind preset."
+        self.windows_management = WindowsManagementPanel(
+            self.output, self._run_job, is_admin, parent=page
         )
-        info.setObjectName("muted")
-        info.setWordWrap(True)
-        layout.addWidget(info)
+        layout.addWidget(self.windows_management, 1)
 
         row = QHBoxLayout()
-        actions = (
-            ("Startup inventory", self.show_startup),
-            ("Services", self.show_services),
-            ("Power plans", self.show_power),
-            ("Network adapters", self.show_network),
-            ("Network config", self.show_network_config),
-            ("Ping 1.1.1.1", self.show_latency),
-        )
-        for text, fn in actions:
+        for text, fn in (
+            ("Windows Optional Features", self.show_features),
+            ("Windows Update status", self.show_update_status),
+            ("Reset Windows Update", self.reset_windows_update),
+        ):
             button = QPushButton(text)
             button.clicked.connect(fn)
             row.addWidget(button)
         layout.addLayout(row)
 
-        high = QPushButton("Activate High Performance power plan")
-        high.clicked.connect(self.enable_high_performance)
-        layout.addWidget(high)
-
-        power = QPushButton("Power plans")
-        power.clicked.connect(self.show_power_center)
-        layout.addWidget(power)
-
-        power_select = QPushButton("Activate supported power plan")
-        power_select.clicked.connect(self.change_power_plan)
-        layout.addWidget(power_select)
-
-        battery = QPushButton("Generate battery report")
-        battery.clicked.connect(self.generate_battery_report)
-        layout.addWidget(battery)
-
-        services = QPushButton("Service inventory")
-        services.clicked.connect(self.show_service_inventory)
-        layout.addWidget(services)
-
-        service_mode = QPushButton("Change service startup mode")
-        service_mode.clicked.connect(self.change_service_mode)
-        layout.addWidget(service_mode)
-
-        dns = QPushButton("DNS inventory")
-        dns.clicked.connect(self.show_dns)
-        layout.addWidget(dns)
-
-        dns_set = QPushButton("Set DNS preset")
-        dns_set.clicked.connect(self.change_dns)
-        layout.addWidget(dns_set)
-
-        dns_flush_button = QPushButton("Flush DNS cache")
-        dns_flush_button.clicked.connect(self.flush_dns)
-        layout.addWidget(dns_flush_button)
-
-        storage = QPushButton("Storage analyzer")
-        storage.clicked.connect(self.show_storage)
-        layout.addWidget(storage)
-
-        feature = QPushButton("Windows Optional Features inventory")
-        feature.clicked.connect(self.show_features)
-        layout.addWidget(feature)
-
-        enable_feature = QPushButton("Enable exact Windows feature")
-        enable_feature.clicked.connect(lambda: self.change_feature(True))
-        layout.addWidget(enable_feature)
-
-        disable_feature = QPushButton("Disable exact Windows feature")
-        disable_feature.clicked.connect(lambda: self.change_feature(False))
-        layout.addWidget(disable_feature)
-
-        update = QPushButton("Windows Update status")
-        update.clicked.connect(self.show_update_status)
-        layout.addWidget(update)
-
-        reset_update = QPushButton("Reset Windows Update components")
-        reset_update.clicked.connect(self.reset_windows_update)
-        layout.addWidget(reset_update)
-
-        layout.addStretch()
         self.stack.addWidget(page)
 
     def _build_repairs_page(self):
