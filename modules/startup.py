@@ -30,8 +30,18 @@ def records():
     raw = inventory()
     try:
         value = json.loads(raw)
-    except json.JSONDecodeError as exc:
-        raise RuntimeError(f"Startup inventory returned invalid JSON: {exc}") from exc
+    except json.JSONDecodeError:
+        # Tolerate legacy/mocked PowerShell output with literal Windows
+        # backslashes. Genuine ConvertTo-Json output stays on the fast path.
+        repaired = re.sub(
+            r'(?<!\\)\\(?!["\\/bfnrtu]|u[0-9a-fA-F]{4})',
+            r'\\\\',
+            raw,
+        )
+        try:
+            value = json.loads(repaired)
+        except json.JSONDecodeError as exc:
+            raise RuntimeError(f"Startup inventory returned invalid JSON: {exc}") from exc
     if isinstance(value, dict):
         value = [value]
     return [classify(v) for v in value]
