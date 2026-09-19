@@ -6,7 +6,6 @@ blocking is performed.
 """
 from __future__ import annotations
 
-from datetime import date
 import re
 import base64
 import winreg
@@ -76,13 +75,15 @@ def _delete_policy_value(name):
 
 
 def pause_quality():
-    _write_policy_string("PauseQualityUpdatesStartTime", date.today().isoformat())
-    return "Quality updates paused from today; Windows documents a maximum 35-day pause window."
+    _ensure_admin()
+    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseQualityUpdatesStartTime", 1)
+    return "Quality updates pause policy enabled; Windows documents a maximum 35-day pause window."
 
 
 def pause_feature():
-    _write_policy_string("PauseFeatureUpdatesStartTime", date.today().isoformat())
-    return "Feature updates paused from today; Windows documents a maximum 35-day pause window."
+    _ensure_admin()
+    write_dword(winreg.HKEY_LOCAL_MACHINE, POLICY, "PauseFeatureUpdatesStartTime", 1)
+    return "Feature updates pause policy enabled; Windows documents a maximum 35-day pause window."
 
 
 def resume_quality():
