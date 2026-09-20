@@ -111,3 +111,27 @@ try {
         "network": network,
     }
 
+
+
+def sensors():
+    """Return Windows-exposed thermal-zone and fan sensor records."""
+    script = r"""
+$temps = @()
+$fans = @()
+try { $temps = @(Get-CimInstance MSAcpi_ThermalZoneTemperature -ErrorAction Stop | Select-Object Name,CurrentTemperature) } catch {}
+try { $fans = @(Get-CimInstance Win32_Fan -ErrorAction Stop | Select-Object Name,DesiredSpeed,Status) } catch {}
+[pscustomobject]@{ temperatures = $temps; fans = $fans } | ConvertTo-Json -Compress -Depth 4
+"""
+    try:
+        value = json.loads(_powershell(script, 15))
+    except (TypeError, ValueError, RuntimeError):
+        value = {}
+    if not isinstance(value, dict):
+        value = {}
+    temperatures = value.get("temperatures") or []
+    fans = value.get("fans") or []
+    if isinstance(temperatures, dict):
+        temperatures = [temperatures]
+    if isinstance(fans, dict):
+        fans = [fans]
+    return {"temperatures": temperatures, "fans": fans}
