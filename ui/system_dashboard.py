@@ -6,7 +6,6 @@ from PySide6.QtWidgets import (
     QPushButton, QTextEdit, QVBoxLayout, QWidget,
 )
 
-from core.jobs import JobRunner
 from modules.hardware_monitor import live, sensors
 from modules.system_snapshot import snapshot
 
@@ -38,9 +37,11 @@ class MetricCard(QFrame):
 class SystemDashboard(QWidget):
     """Modern system cockpit: fast telemetry + slower hardware inventory."""
 
-    def __init__(self, parent=None):
+    def __init__(self, job_runner, parent=None):
         super().__init__(parent)
-        self.jobs = JobRunner(self)
+        self.jobs = job_runner
+        self._closing = False
+        self._generation = 0
         self._live_busy = False
         self._inventory_busy = False
         self._sensor_busy = False
@@ -179,15 +180,18 @@ class SystemDashboard(QWidget):
         return [text] if text else []
 
     def _refresh_live(self):
-        if self._live_busy:
+        if self._closing or self._live_busy:
             return
         self._live_busy = True
+        generation = self._generation
         signals = self.jobs.submit(live)
-        signals.finished.connect(self._live_done)
-        signals.failed.connect(self._live_failed)
+        signals.finished.connect(lambda data, g=generation: self._live_done(data, g))
+        signals.failed.connect(lambda error, g=generation: self._live_failed(error, g))
 
-    def _live_done(self, data):
+    def _live_done(self, data, generation):
         self._live_busy = False
+        if self._closing or generation != self._generation:
+            return
         cpu = self._first(data.get("cpu"))
         gpu = self._first(data.get("gpu"))
         memory = self._first(data.get("memory"))
@@ -208,20 +212,25 @@ class SystemDashboard(QWidget):
         size = self._gb(disk.get("Size"))
         self.disk_card.set_value(free, f"{size} total")
 
-    def _live_failed(self, error):
+    def _live_failed(self, error, generation):
         self._live_busy = False
+        if self._closing or generation != self._generation:
+            return
         self.subtitle.setText(f"Live telemetry unavailable: {error}")
 
     def _refresh_sensors(self):
-        if self._sensor_busy:
+        if self._closing or self._sensor_busy:
             return
         self._sensor_busy = True
+        generation = self._generation
         signals = self.jobs.submit(sensors)
-        signals.finished.connect(self._sensors_done)
-        signals.failed.connect(self._sensors_failed)
+        signals.finished.connect(lambda data, g=generation: self._sensors_done(data, g))
+        signals.failed.connect(lambda error, g=generation: self._sensors_failed(error, g))
 
-    def _sensors_done(self, data):
+    def _sensors_done(self, data, generation):
         self._sensor_busy = False
+        if self._closing or generation != self._generation:
+            return
         temp = data.get("temperatures", [])
         fan = data.get("fans", [])
         temp_items = temp if isinstance(temp, list) else [temp]
@@ -244,20 +253,25 @@ class SystemDashboard(QWidget):
         prefix = f"{self._hardware_identity}<br>" if self._hardware_identity else ""
         self.hardware.setText(prefix + sensor_text)
 
-    def _sensors_failed(self, _error):
+    def _sensors_failed(self, _error, generation):
         self._sensor_busy = False
+        if self._closing or generation != self._generation:
+            return
 
     def _refresh_inventory(self):
-        if self._inventory_busy:
+        if self._closing or self._inventory_busy:
             return
         self._inventory_busy = True
         self.refresh_button.setEnabled(False)
+        generation = self._generation
         signals = self.jobs.submit(snapshot)
-        signals.finished.connect(self._inventory_done)
-        signals.failed.connect(self._inventory_failed)
+        signals.finished.connect(lambda data, g=generation: self._inventory_done(data, g))
+        signals.failed.connect(lambda error, g=generation: self._inventory_failed(error, g))
 
-    def _inventory_done(self, data):
+    def _inventory_done(self, data, generation):
         self._inventory_busy = False
+        if self._closing or generation != self._generation:
+            return
         self.refresh_button.setEnabled(True)
         info = data.get("system", {})
         self.identity.setText(
@@ -328,7 +342,16 @@ class SystemDashboard(QWidget):
         layout.addWidget(buttons)
         dialog.exec()
 
-    def _inventory_failed(self, error):
+    def _inventory_failed(self, error, generation):
         self._inventory_busy = False
+        if self._closing or generation != self._generation:
+            return
         self.refresh_button.setEnabled(True)
         self.subtitle.setText(f"System inventory failed: {error}")
+
+    def shutdown(self):
+        """Stop dashboard timers and invalidate callbacks owned by this view."""
+        self._closing = True
+        self._generation += 1
+        self.timer.stop()
+        self.sensor_timer.stop()
