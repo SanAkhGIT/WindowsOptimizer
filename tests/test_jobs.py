@@ -41,3 +41,25 @@ def test_job_runner_reports_failure_and_releases_job():
     assert "ValueError: expected failure" in result["failed"][0]
     assert runner.active_count == 0
     app.processEvents()
+
+
+def test_job_runner_runs_independent_tasks_in_parallel():
+    app = QCoreApplication.instance() or QCoreApplication([])
+    runner = JobRunner()
+    signals = runner.submit_many([
+        (lambda: "one", (), {}),
+        (lambda: "two", (), {}),
+        (lambda: "three", (), {}),
+    ])
+    results = []
+    loop = QEventLoop()
+    remaining = {"count": len(signals)}
+    for signal in signals:
+        signal.finished.connect(results.append)
+        signal.finished.connect(lambda _value: (remaining.__setitem__("count", remaining["count"] - 1), loop.quit() if remaining["count"] == 0 else None))
+    QTimer.singleShot(3000, loop.quit)
+    loop.exec()
+    assert sorted(results) == ["one", "three", "two"]
+    assert runner.active_count == 0
+    assert runner.capacity()["max_workers"] >= 4
+    app.processEvents()
