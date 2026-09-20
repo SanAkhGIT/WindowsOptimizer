@@ -1,3 +1,6 @@
+import os
+import time
+
 from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
 from core.logging import get_logger, log_exception
 
@@ -49,7 +52,11 @@ class JobRunner(QObject):
     def __init__(self, parent=None):
         super().__init__(parent)
         self.pool = QThreadPool.globalInstance()
+        # Windows operations are predominantly subprocess/IO bound. Use the CPU topology
+        # as a practical worker ceiling while retaining a minimum of four slots.
+        self.pool.setMaxThreadCount(max(4, self.pool.idealThreadCount()))
         self._active_jobs = set()
+        self._started_at = {}
 
     @property
     def active_count(self):
@@ -58,11 +65,34 @@ class JobRunner(QObject):
     def submit(self, fn, *args, **kwargs):
         job = Job(fn, *args, **kwargs)
         self._active_jobs.add(job)
+        self._started_at[job] = time.monotonic()
 
         def release(*_args):
             self._active_jobs.discard(job)
+            self._started_at.pop(job, None)
 
         job.signals.finished.connect(release)
         job.signals.failed.connect(release)
         self.pool.start(job)
         return job.signals
+
+    def submit_many(self, tasks):
+        """Start independent tasks concurrently on the shared worker pool.
+
+        Each task is ``(fn, args, kwargs)``. This is intentionally a low-level
+        primitive: callers must only batch work without ordering/shared-state
+        dependencies. QThreadPool queues excess tasks safely.
+        """
+        return [self.submit(fn, *args, **kwargs) for fn, args, kwargs in tasks]
+
+    def capacity(self):
+        """Return worker-pool capacity for diagnostics and smart scheduling."""
+        active = self.pool.activeThreadCount()
+        maximum = self.pool.maxThreadCount()
+        return {
+            "logical_cpus": os.cpu_count() or 1,
+            "max_workers": maximum,
+            "active_jobs": self.active_count,
+            "active_workers": active,
+            "available_workers": max(0, maximum - active),
+        }
