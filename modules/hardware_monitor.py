@@ -29,9 +29,9 @@ $gpus = @(Get-CimInstance Win32_VideoController |
 $gpuUsage = @{}
 try {
     Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop |
-      Where-Object { $_.Name -match "_phys_(\\d+)_.*engtype_3D" } |
+      Where-Object { $_.Name -match "_phys_(\d+)_.*engtype_3D" } |
       ForEach-Object {
-        if ($_.Name -match "_phys_(\\d+)_") {
+        if ($_.Name -match "_phys_(\d+)_") {
           $index = [int]$matches[1]
           if (-not $gpuUsage.ContainsKey($index)) { $gpuUsage[$index] = 0.0 }
           $gpuUsage[$index] += [double]$_.UtilizationPercentage
