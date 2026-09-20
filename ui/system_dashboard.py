@@ -184,7 +184,7 @@ class SystemDashboard(QWidget):
             return
         self._live_busy = True
         generation = self._generation
-        signals = self.jobs.submit(live)
+        signals = self.jobs.submit(live, job_priority=10)
         signals.finished.connect(lambda data, g=generation: self._live_done(data, g))
         signals.failed.connect(lambda error, g=generation: self._live_failed(error, g))
 
@@ -223,7 +223,7 @@ class SystemDashboard(QWidget):
             return
         self._sensor_busy = True
         generation = self._generation
-        signals = self.jobs.submit(sensors)
+        signals = self.jobs.submit(sensors, job_priority=2)
         signals.finished.connect(lambda data, g=generation: self._sensors_done(data, g))
         signals.failed.connect(lambda error, g=generation: self._sensors_failed(error, g))
 
@@ -264,7 +264,7 @@ class SystemDashboard(QWidget):
         self._inventory_busy = True
         self.refresh_button.setEnabled(False)
         generation = self._generation
-        signals = self.jobs.submit(snapshot)
+        signals = self.jobs.submit(snapshot, job_priority=-2)
         signals.finished.connect(lambda data, g=generation: self._inventory_done(data, g))
         signals.failed.connect(lambda error, g=generation: self._inventory_failed(error, g))
 
