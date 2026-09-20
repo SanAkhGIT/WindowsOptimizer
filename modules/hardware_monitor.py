@@ -26,15 +26,15 @@ def live():
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 Name,LoadPercentage,CurrentClockSpeed,MaxClockSpeed
 $gpus = @(Get-CimInstance Win32_VideoController |
     Select-Object Name,DriverVersion,DriverDate,AdapterRAM,VideoProcessor)
-$gpuUsage = @{}
+$gpuUsage = [ordered]@{}
 try {
     Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop |
       Where-Object { $_.Name -match "_phys_(\d+)_.*engtype_3D" } |
       ForEach-Object {
         if ($_.Name -match "_phys_(\d+)_") {
           $index = [int]$matches[1]
-          if (-not $gpuUsage.ContainsKey($index)) { $gpuUsage[$index] = 0.0 }
-          $gpuUsage[$index] += [double]$_.UtilizationPercentage
+          if (-not $gpuUsage.ContainsKey($index)) { $gpuUsage["$index"] = 0.0 }
+          $gpuUsage["$index"] += [double]$_.UtilizationPercentage
         }
       }
 } catch {}
@@ -98,9 +98,24 @@ try {
                     "recv_total": counter.bytes_recv,
                 })
 
+    gpu_usage = value.get("gpuUsage") or {}
+    if not isinstance(gpu_usage, dict):
+        gpu_usage = {}
+    raw_gpus = value.get("gpus")
+    gpus = raw_gpus if isinstance(raw_gpus, list) else [raw_gpus] if raw_gpus else []
+    for index, gpu in enumerate(gpus):
+        if not isinstance(gpu, dict):
+            continue
+        usage = gpu_usage.get(str(index))
+        if usage is not None:
+            try:
+                gpu["utilization"] = float(usage)
+            except (TypeError, ValueError):
+                pass
+
     return {
         "cpu": value.get("cpu") or {},
-        "gpus": value.get("gpus") if isinstance(value.get("gpus"), list) else [value.get("gpus")] if value.get("gpus") else [],
+        "gpus": gpus,
         "memory": {
             "total": memory.total,
             "used": memory.used,
