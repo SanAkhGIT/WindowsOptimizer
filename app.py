@@ -187,7 +187,7 @@ class MainWindow(QMainWindow):
         self._navigate(0)
 
     def _build_pages(self):
-        self.dashboard = SystemDashboard()
+        self.dashboard = SystemDashboard(self.jobs)
         self.stack.addWidget(self.dashboard)
         self._build_tweaks_page()
         self.appx_panel = AppxPanel(self.output, self._run_job, open_system_debloat=lambda: self._navigate(1))
@@ -1234,9 +1234,6 @@ class MainWindow(QMainWindow):
         self._operation_serial += 1
         self._busy = False
         if hasattr(self, "dashboard"):
-            for timer_name in ("timer", "sensor_timer"):
-                timer = getattr(self.dashboard, timer_name, None)
-                if timer is not None:
-                    timer.stop()
+            self.dashboard.shutdown()
         self.logger.info("Main window closing")
         event.accept()
