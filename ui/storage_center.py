@@ -157,11 +157,17 @@ class StorageCenterPanel(QWidget):
     def recycle_status(self):
         self.run_job(recycle_bin_status, done=self._show_result, fail=self._error)
 
+    def _open_settings(self, fn):
+        try:
+            self._show_result(fn())
+        except Exception as exc:
+            self._error(f"{type(exc).__name__}: {exc}")
+
     def open_storage(self):
-        self.run_job(open_storage_settings, done=self._show_result, fail=self._error)
+        self._open_settings(open_storage_settings)
 
     def open_recommendations(self):
-        self.run_job(open_cleanup_recommendations, done=self._show_result, fail=self._error)
+        self._open_settings(open_cleanup_recommendations)
 
     def disk_cleanup(self):
         self.run_job(run_disk_cleanup, done=self._show_result, fail=self._error)
