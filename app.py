@@ -768,10 +768,10 @@ class MainWindow(QMainWindow):
             self.activity.append(f"BUSY    {title} was not started; another operation is running.")
             return False
 
-        self.logger.info("GUI operation requested | operation=%s | operation_id=%s | args=%r", operation, operation_id, args)
-        self._busy = True
         self._operation_serial += 1
         operation_id = self._operation_serial
+        self.logger.info("GUI operation requested | operation=%s | operation_id=%s | args=%r", operation, operation_id, args)
+        self._busy = True
         self.busy_label.setText(f"● Working…  {title}")
         self._set_page_controls_enabled(False)
         self.activity.start(title, operation_id)
