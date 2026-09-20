@@ -768,13 +768,13 @@ class MainWindow(QMainWindow):
             self.activity.append(f"BUSY    {title} was not started; another operation is running.")
             return False
 
-        self.logger.info("GUI operation requested | operation=%s | args=%r", operation, args)
+        self.logger.info("GUI operation requested | operation=%s | operation_id=%s | args=%r", operation, operation_id, args)
         self._busy = True
         self._operation_serial += 1
         operation_id = self._operation_serial
         self.busy_label.setText(f"● Working…  {title}")
         self._set_page_controls_enabled(False)
-        self.activity.start(title)
+        self.activity.start(title, operation_id)
         self.activity.append(f"START  {title}")
 
         try:
@@ -800,7 +800,7 @@ class MainWindow(QMainWindow):
         return True
 
     def _job_finished(self, value, done, operation_id):
-        self.logger.info("GUI operation completed | result_type=%s", type(value).__name__)
+        self.logger.info("GUI operation completed | operation_id=%s | result_type=%s", operation_id, type(value).__name__)
         summary = self._result_summary(value)
         try:
             # Release the gate before the callback so follow-up operations can
@@ -821,7 +821,7 @@ class MainWindow(QMainWindow):
         self.activity.success(self.activity.operation.text(), summary)
 
     def _job_failed(self, error, fail, operation_id):
-        self.logger.error("GUI operation failed | error=%s", error)
+        self.logger.error("GUI operation failed | operation_id=%s | error=%s", operation_id, error)
         try:
             if fail:
                 fail(error)
