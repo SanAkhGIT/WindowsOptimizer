@@ -557,8 +557,36 @@ class MainWindow(QMainWindow):
             state,
             on_apply=apply_profile,
             on_execute=execute_profile,
+            rollback=self.rollback_receipt,
+            restore_backup=self.restore_backup,
         )
         dialog.exec()
+
+    def rollback_receipt(self, receipt_path, item_index):
+        try:
+            result = rollback_receipt_item(receipt_path, item_index)
+            self.output.setPlainText(
+                f"ROLLBACK {result.status}\n"
+                f"{result.item.identifier}: {result.item.message}"
+            )
+            self.refresh()
+        except Exception as exc:
+            self._show_error(exc)
+
+    def restore_backup(self, backup_path):
+        if not is_admin():
+            QMessageBox.warning(self, "Administrator required", "Run Windows Optimizer as Administrator.")
+            return
+        try:
+            restored = self.backup.restore(backup_path)
+            self.output.setPlainText(
+                f"REGISTRY BACKUP RESTORED\n"
+                f"Entries restored: {restored}\n"
+                f"Backup: {backup_path}"
+            )
+            self.refresh()
+        except Exception as exc:
+            self._show_error(exc)
 
     def create_backup(self):
         try:
