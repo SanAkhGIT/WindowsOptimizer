@@ -44,23 +44,12 @@ def test_profile_manager_receives_recovery_callbacks(monkeypatch):
         def exec(self):
             captured["executed"] = True
 
-    class FakeFeature:
-        state = "Disabled"
-        name = "demo"
-
     window = MainWindow.__new__(MainWindow)
     monkeypatch.setattr("app.ProfileManagerDialog", FakeDialog)
-    monkeypatch.setattr("app.feature_inventory", lambda: [FakeFeature()])
-    monkeypatch.setattr("app.power_current", lambda: "balanced")
-    monkeypatch.setattr(
-        window,
-        "_run_job",
-        lambda fn, *args, done=None, fail=None, **kwargs: done({}) if done else None,
-    )
-    monkeypatch.setattr(window, "_show_profile_manager", lambda state: None)
 
-    MainWindow.open_profile_manager(window)
+    MainWindow._show_profile_manager(window, {})
 
     assert captured["kwargs"]["rollback"] == window.rollback_receipt
     assert captured["kwargs"]["restore_backup"] == window.restore_backup
     assert captured["executed"] is True
+
