@@ -54,14 +54,20 @@ class GamingCenterPanel(QWidget):
     def show_xbox(self):
         self.run_job(xbox_services, done=self._show, fail=self._error)
 
+    def _open_settings(self, fn):
+        try:
+            self._show(fn())
+        except Exception as exc:
+            self._error(f"{type(exc).__name__}: {exc}")
+
     def graphics(self):
-        self.run_job(open_graphics_settings, done=self._show, fail=self._error)
+        self._open_settings(open_graphics_settings)
 
     def game_mode(self):
-        self.run_job(open_game_mode_settings, done=self._show, fail=self._error)
+        self._open_settings(open_game_mode_settings)
 
     def game_bar(self):
-        self.run_job(open_game_bar_settings, done=self._show, fail=self._error)
+        self._open_settings(open_game_bar_settings)
 
     def _show(self, value):
         self.details.setPlainText(str(value))
