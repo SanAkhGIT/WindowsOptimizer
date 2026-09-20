@@ -135,3 +135,44 @@ try { $fans = @(Get-CimInstance Win32_Fan -ErrorAction Stop | Select-Object Name
     if isinstance(fans, dict):
         fans = [fans]
     return {"temperatures": temperatures, "fans": fans}
+
+def _query_json(script, timeout=15):
+    try:
+        value = json.loads(_powershell(script, timeout))
+    except (TypeError, ValueError, RuntimeError):
+        return []
+    if isinstance(value, dict):
+        return [value]
+    return value if isinstance(value, list) else []
+
+
+def cpu():
+    """Return the primary CPU record."""
+    rows = _query_json(
+        r"""Get-CimInstance Win32_Processor |
+Select-Object -First 1 Name,LoadPercentage,CurrentClockSpeed,MaxClockSpeed |
+ConvertTo-Json -Compress""",
+        15,
+    )
+    return rows[0] if rows else {}
+
+
+def fans():
+    """Return Windows-exposed fan records."""
+    return _query_json(
+        r"""Get-CimInstance Win32_Fan -ErrorAction SilentlyContinue |
+Select-Object Name,DesiredSpeed,Status |
+ConvertTo-Json -Compress""",
+        15,
+    )
+
+
+def temperatures():
+    """Return Windows-exposed thermal-zone records."""
+    return _query_json(
+        r"""Get-CimInstance MSAcpi_ThermalZoneTemperature -ErrorAction SilentlyContinue |
+Select-Object Name,CurrentTemperature |
+ConvertTo-Json -Compress""",
+        15,
+    )
+
