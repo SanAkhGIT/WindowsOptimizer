@@ -11,7 +11,7 @@ from modules.hardware_monitor import live, sensors
 from modules.system_snapshot import snapshot
 from modules.startup_manager import records as startup_records
 from modules.service_manager import inventory as service_inventory
-from modules.services import classify as classify_service, recommendation as service_recommendation
+from modules.services import classify as classify_service
 
 
 class MetricCard(QFrame):
@@ -404,12 +404,10 @@ class SystemDashboard(QWidget):
         startup_rows = startup.get("startup", []) if isinstance(startup, dict) else []
         self.startup_table.setRowCount(len(startup_rows))
         for row, item in enumerate(startup_rows):
-            command = str(item.get("Command") or item.get("command") or "")
-            publisher = self._publisher(command)
             values = [
                 item.get("Name", "Unknown"),
-                publisher,
-                "Enabled",
+                item.get("Publisher") or "Unknown",
+                item.get("Status") or "Enabled",
                 item.get("source", "Other"),
                 item.get("impact", "Review"),
             ]
