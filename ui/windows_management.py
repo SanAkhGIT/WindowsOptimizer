@@ -8,6 +8,7 @@ from modules.service_manager import inventory as service_inventory, details as s
 from modules.power_center import current as power_current, plans as power_plans
 from modules.dns_center import inventory as dns_inventory
 from modules.storage_center import candidates as storage_categories, system_drive as storage_drive
+from modules.services import classify as classify_service, recommendation as service_recommendation, attention as service_attention
 
 
 class WindowsManagementPanel(QWidget):
@@ -131,8 +132,8 @@ class WindowsManagementPanel(QWidget):
         row.addWidget(restore)
         row.addStretch()
         layout.addLayout(row)
-        self.service_table = QTableWidget(0, 6)
-        self.service_table.setHorizontalHeaderLabels(["Name","Display Name","State","Start Mode","Account","Path"])
+        self.service_table = QTableWidget(0, 8)
+        self.service_table.setHorizontalHeaderLabels(["Name","Display Name","State","Start Mode","Type","Attention","Account","Path"])
         self.service_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
         self.service_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
         layout.addWidget(self.service_table)
@@ -147,11 +148,18 @@ class WindowsManagementPanel(QWidget):
         if isinstance(data, dict): data = [data]
         self.service_table.setRowCount(len(data))
         for i, item in enumerate(data):
-            values = [item.get("Name",""), item.get("DisplayName",""), item.get("State",""),
-                      item.get("StartMode",""), item.get("StartName",""), item.get("PathName","")]
+            values = [
+                item.get("Name",""), item.get("DisplayName",""), item.get("State",""),
+                item.get("StartMode",""), classify_service(item),
+                service_attention(item), item.get("StartName",""), item.get("PathName","")
+            ]
             for j, value in enumerate(values):
                 self.service_table.setItem(i, j, QTableWidgetItem(str(value)))
-        self.output.setPlainText(f"SERVICE INVENTORY\n{len(data)} services found. No changes were made.")
+        review = [item for item in data if service_attention(item) in {"Review", "Attention", "Inspect"}]
+        self.output.setPlainText(
+            f"SERVICE INVENTORY\n{len(data)} services found. No changes were made.\n"
+            f"{len(review)} service(s) require review/inspection; nothing was changed automatically."
+        )
 
     def _selected_service_name(self):
         row = self.service_table.currentRow()
