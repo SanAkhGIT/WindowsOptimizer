@@ -1,5 +1,7 @@
 import os
 import time
+import threading
+from dataclasses import dataclass, field
 
 from PySide6.QtCore import QObject, Signal, QRunnable, QThread, QThreadPool
 from core.logging import get_logger, log_exception
@@ -40,6 +42,44 @@ class Job(QRunnable):
         except Exception as exc:
             log_exception(logger, f"Job failed | operation={operation}", exc)
             self._emit(self.signals.failed, f"{type(exc).__name__}: {exc}")
+
+
+@dataclass(frozen=True)
+class TaskSpec:
+    name: str
+    fn: object
+    args: tuple = ()
+    kwargs: dict = field(default_factory=dict)
+    depends_on: tuple = ()
+    resource: str = "default"
+    priority: int = 0
+
+
+class TaskPlan:
+    def __init__(self, tasks):
+        tasks = list(tasks)
+        self.tasks = {task.name: task for task in tasks}
+        if len(self.tasks) != len(tasks):
+            raise ValueError("Task names must be unique")
+        unknown = {d for task in tasks for d in task.depends_on if d not in self.tasks}
+        if unknown:
+            raise ValueError(f"Unknown task dependencies: {sorted(unknown)}")
+        self._validate_acyclic()
+
+    def _validate_acyclic(self):
+        visiting, visited = set(), set()
+        def visit(name):
+            if name in visiting:
+                raise ValueError("Task plan contains a dependency cycle")
+            if name in visited:
+                return
+            visiting.add(name)
+            for dep in self.tasks[name].depends_on:
+                visit(dep)
+            visiting.remove(name)
+            visited.add(name)
+        for name in self.tasks:
+            visit(name)
 
 
 class JobRunner(QObject):
@@ -96,6 +136,54 @@ class JobRunner(QObject):
             signals.append(self.submit(fn, *args, job_priority=priority, **kwargs))
         return signals
 
+    def submit_plan(self, plan, on_complete=None):
+        """Run independent tasks concurrently while respecting dependencies/resources."""
+        if not isinstance(plan, TaskPlan):
+            plan = TaskPlan(plan)
+        state = {name: "pending" for name in plan.tasks}
+        signals = {}
+        resource_active = set()
+        lock = threading.RLock()
+
+        def dispatch():
+            with lock:
+                for name, task in plan.tasks.items():
+                    if state[name] != "pending":
+                        continue
+                    if any(state[d] == "failed" for d in task.depends_on):
+                        state[name] = "failed"
+                        if on_complete:
+                            on_complete(name, None, "dependency failed")
+                        continue
+                    if any(state[d] != "done" for d in task.depends_on):
+                        continue
+                    if task.resource in resource_active:
+                        continue
+                    resource_active.add(task.resource)
+                    state[name] = "running"
+                    sig = self.submit(task.fn, *task.args, job_priority=task.priority, **task.kwargs)
+                    signals[name] = sig
+
+                    def done(value, task_name=name, resource=task.resource):
+                        with lock:
+                            state[task_name] = "done"
+                            resource_active.discard(resource)
+                        if on_complete:
+                            on_complete(task_name, value, None)
+                        dispatch()
+
+                    def failed(error, task_name=name, resource=task.resource):
+                        with lock:
+                            state[task_name] = "failed"
+                            resource_active.discard(resource)
+                        if on_complete:
+                            on_complete(task_name, None, error)
+                        dispatch()
+
+                    sig.finished.connect(done)
+                    sig.failed.connect(failed)
+        dispatch()
+        return signals
     def capacity(self):
         """Return worker-pool capacity for diagnostics and smart scheduling."""
         active = self.pool.activeThreadCount()
