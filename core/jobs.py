@@ -1,7 +1,7 @@
 import os
 import time
 
-from PySide6.QtCore import QObject, Signal, QRunnable, QThreadPool
+from PySide6.QtCore import QObject, Signal, QRunnable, QThread, QThreadPool
 from core.logging import get_logger, log_exception
 
 
@@ -54,7 +54,7 @@ class JobRunner(QObject):
         self.pool = QThreadPool.globalInstance()
         # Windows operations are predominantly subprocess/IO bound. Use the CPU topology
         # as a practical worker ceiling while retaining a minimum of four slots.
-        self.pool.setMaxThreadCount(max(4, self.pool.idealThreadCount()))
+        self.pool.setMaxThreadCount(max(4, QThread.idealThreadCount()))
         self._active_jobs = set()
         self._started_at = {}
 
