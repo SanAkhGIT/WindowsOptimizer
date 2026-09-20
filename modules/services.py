@@ -36,23 +36,49 @@ def records():
 
 
 def classify(service):
-    text = " ".join(
-        str(service.get(key, "") or "")
-        for key in ("Name", "DisplayName", "PathName", "StartName")
-    ).lower()
-    windows_markers = ("microsoft", "\\windows\\", "windows\\")
-    if any(marker in text for marker in windows_markers):
+    import os
+    name = str(service.get("Name", "") or "").lower()
+    display = str(service.get("DisplayName", "") or "").lower()
+    path = str(service.get("PathName", "") or "").lower()
+    windir = str(os.environ.get("WINDIR", r"C:\Windows")).lower().rstrip("\\")
+    if path.startswith(windir + "\\") or ("\\windows\\" in path and path.startswith(r"\\?\\")):
         return "Windows"
-    if any(marker in text for marker in ("intel", "amd", "nvidia", "realtek", "oem")):
+    combined = " ".join((name, display, path))
+    if any(marker in combined for marker in ("amd", "intel", "nvidia", "realtek", "msi", "asus", "lenovo", "dell", "oem")):
         return "Hardware/OEM"
+    if "microsoft defender" in display or display.startswith("windows ") or name.startswith("wuauserv"):
+        return "Windows/Security"
+    if path.startswith(r"c:\program files") or path.startswith(r"c:\programdata"):
+        return "Third-party/Unknown"
     return "Third-party/Unknown"
 
 
 def recommendation(service):
-    if str(service.get("StartMode", "")).lower() == "disabled":
+    mode = str(service.get("StartMode", "") or "").lower()
+    state = str(service.get("State", "") or "").lower()
+    description = str(service.get("Description", "") or "").lower()
+    classification = classify(service)
+    if mode == "disabled":
+        if "strongly recommended" in description or "system instability" in description:
+            return "Attention: disabled service has an explicit Windows warning."
         return "Leave unchanged; already disabled."
-    if classify(service) == "Windows":
-        return "Leave unchanged unless a specific Windows issue is being diagnosed."
-    if classify(service) == "Hardware/OEM":
+    if classification.startswith("Windows"):
+        return "Leave unchanged unless diagnosing a specific Windows issue."
+    if classification == "Hardware/OEM":
         return "Review only if the associated hardware/software is unused."
+    if mode in {"auto", "automatic"} and state == "running":
+        return "Review: third-party service starts automatically."
     return "Review publisher, path and dependency before changing startup mode."
+
+def attention(service):
+    mode = str(service.get("StartMode", "") or "").lower()
+    state = str(service.get("State", "") or "").lower()
+    description = str(service.get("Description", "") or "")
+    classification = classify(service)
+    if not description or "failed to read description" in description.lower():
+        return "Inspect"
+    if mode == "disabled" and ("strongly recommended" in description.lower() or "system instability" in description.lower()):
+        return "Attention"
+    if classification.startswith("Third-party") and mode in {"auto", "automatic"} and state == "running":
+        return "Review"
+    return "Normal"
