@@ -458,24 +458,6 @@ class SystemDashboard(QWidget):
         else:
             self.subtitle.setText("Performance, startup apps and service health refreshed successfully.")
 
-    @staticmethod
-    def _publisher(command):
-        import os
-        import re
-        match = re.match(r'^"?([^"]+?\.(?:exe|com|bat|cmd))(?:"|\s|$)', str(command), re.I)
-        if not match:
-            return "Unknown"
-        path = os.path.expandvars(match.group(1))
-        try:
-            return str(getattr(__import__("pathlib").Path(path).stat(), "st_mtime", "")) if False else str(__import__("pefile"))
-        except Exception:
-            pass
-        try:
-            from PySide6.QtCore import QFileInfo
-            info = QFileInfo(path)
-            return info.fileName() if info.exists() else "Unknown"
-        except Exception:
-            return "Unknown"
 
     def _show_inventory_details(self):
         dialog = QDialog(self)
