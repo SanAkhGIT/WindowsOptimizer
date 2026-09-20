@@ -26,9 +26,29 @@ def live():
 $cpu = Get-CimInstance Win32_Processor | Select-Object -First 1 Name,LoadPercentage,CurrentClockSpeed,MaxClockSpeed
 $gpus = @(Get-CimInstance Win32_VideoController |
     Select-Object Name,DriverVersion,DriverDate,AdapterRAM,VideoProcessor)
+$gpuUsage = @{}
+try {
+    Get-CimInstance Win32_PerfFormattedData_GPUPerformanceCounters_GPUEngine -ErrorAction Stop |
+      Where-Object { $_.Name -match "_phys_(\\d+)_.*engtype_3D" } |
+      ForEach-Object {
+        if ($_.Name -match "_phys_(\\d+)_") {
+          $index = [int]$matches[1]
+          if (-not $gpuUsage.ContainsKey($index)) { $gpuUsage[$index] = 0.0 }
+          $gpuUsage[$index] += [double]$_.UtilizationPercentage
+        }
+      }
+} catch {}
+$diskPerf = @{}
+try {
+    Get-CimInstance Win32_PerfFormattedData_PerfDisk_LogicalDisk -ErrorAction Stop |
+      Where-Object { $_.Name -ne "_Total" } |
+      ForEach-Object { $diskPerf[$_.Name] = [double]$_.PercentDiskTime }
+} catch {}
 [pscustomobject]@{
     cpu = $cpu
     gpus = $gpus
+    gpuUsage = $gpuUsage
+    diskPerf = $diskPerf
 } | ConvertTo-Json -Compress -Depth 5
 """
     value = json.loads(_powershell(script, 20))
@@ -53,6 +73,7 @@ $gpus = @(Get-CimInstance Win32_VideoController |
             "used": usage.used,
             "free": usage.free,
             "percent": usage.percent,
+            "active_percent": float(value.get("diskPerf", {}).get(device.rstrip("\\").upper(), 0) or 0),
         })
 
     now = time.monotonic()
