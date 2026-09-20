@@ -1,6 +1,7 @@
 import locale
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 
 from core.logging import get_logger
@@ -41,6 +42,7 @@ def _decode_output(data):
 def run_executable(executable, args=(), timeout=120):
     logger = get_logger("process")
     command = [str(executable), *(str(arg) for arg in args)]
+    started = time.monotonic()
     logger.info(
         "Process started | executable=%s | args=%r | timeout=%s",
         executable,
@@ -54,16 +56,20 @@ def run_executable(executable, args=(), timeout=120):
             text=False,
             timeout=timeout,
         )
+    except subprocess.TimeoutExpired:
+        logger.exception("Process timed out | executable=%s | timeout=%s | elapsed=%.2fs", executable, timeout, time.monotonic() - started)
+        raise
     except Exception:
-        logger.exception("Process failed to start | executable=%s", executable)
+        logger.exception("Process failed to start | executable=%s | elapsed=%.2fs", executable, time.monotonic() - started)
         raise
 
     stdout = _decode_output(p.stdout).strip()
     stderr = _decode_output(p.stderr).strip()
     logger.info(
-        "Process finished | executable=%s | returncode=%s | stdout=%r | stderr=%r",
+        "Process finished | executable=%s | returncode=%s | duration=%.2fs | stdout=%r | stderr=%r",
         executable,
         p.returncode,
+        time.monotonic() - started,
         stdout[-4000:],
         stderr[-4000:],
     )
