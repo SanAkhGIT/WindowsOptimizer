@@ -136,6 +136,7 @@ try { $fans = @(Get-CimInstance Win32_Fan -ErrorAction Stop | Select-Object Name
         fans = [fans]
     return {"temperatures": temperatures, "fans": fans}
 
+
 def _query_json(script, timeout=15):
     try:
         value = json.loads(_powershell(script, timeout))
