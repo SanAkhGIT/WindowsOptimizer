@@ -190,7 +190,7 @@ class MainWindow(QMainWindow):
         self.dashboard = SystemDashboard()
         self.stack.addWidget(self.dashboard)
         self._build_tweaks_page()
-        self.appx_panel = AppxPanel(self.output, self._run_job)
+        self.appx_panel = AppxPanel(self.output, self._run_job, open_system_debloat=lambda: self._navigate(1))
         self.stack.addWidget(self.appx_panel)
         self.software_panel = SoftwarePanel(self.output, self._run_job)
         self.stack.addWidget(self.software_panel)
