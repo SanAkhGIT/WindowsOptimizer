@@ -243,8 +243,12 @@ class SystemDashboard(QWidget):
             card.hide()
 
         cpu = self._first(data.get("cpu"))
-        clock = cpu.get("CurrentClockSpeed") or "—"
-        self._card(cards[0], "CPU", f"{cpu.get('LoadPercentage', '—')}%", f"{clock} MHz • {cpu.get('Name', 'CPU')}")
+        clock = cpu.get("CurrentClockSpeed")
+        try:
+            clock_text = f"{float(clock) / 1000:.2f} GHz"
+        except (TypeError, ValueError):
+            clock_text = "—"
+        self._card(cards[0], "CPU", f"{cpu.get('LoadPercentage', '—')}%", f"{clock_text} • {cpu.get('Name', 'CPU')}")
         memory = data.get("memory") or {}
         total = float(memory.get("total") or 0)
         used = float(memory.get("used") or 0)
@@ -256,7 +260,9 @@ class SystemDashboard(QWidget):
         for index, disk in enumerate(disks[:3], start=2):
             name = disk.get("name") or f"Disk {index - 1}"
             media = disk.get("fstype") or "Local disk"
-            self._card(cards[index], name, f"{disk.get('percent', 0):.0f}%", f"{media} • {disk.get('free', 0) / 1024**3:.1f} GB free")
+            active = disk.get("active_percent")
+            active_text = f"{float(active):.0f}% active" if active is not None else "activity unavailable"
+            self._card(cards[index], name, f"{active_text}", f"{media} • {disk.get('free', 0) / 1024**3:.1f} GB free")
 
         networks = sorted(data.get("network") or [], key=lambda item: item.get("recv_bps", 0) + item.get("sent_bps", 0), reverse=True)
         if networks:
@@ -267,7 +273,9 @@ class SystemDashboard(QWidget):
             name = gpu.get("Name") or f"GPU {index - 6}"
             ram = gpu.get("AdapterRAM")
             ram_text = f"{float(ram) / 1024**3:.1f} GB dedicated" if ram else "Dedicated memory unavailable"
-            self._card(cards[index], f"GPU {index - 6}", "—", f"{name} • {ram_text}")
+            utilization = gpu.get("utilization")
+            value = f"{float(utilization):.0f}%" if utilization is not None else "—"
+            self._card(cards[index], f"GPU {index - 6}", value, f"{name} • {ram_text}")
 
 
     def _live_failed(self, error, generation):
