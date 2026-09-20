@@ -18,7 +18,28 @@ def _ps(script, timeout=90):
 def inventory():
     script = r"""
 $startup = @(Get-CimInstance Win32_StartupCommand -ErrorAction SilentlyContinue |
-  Select-Object Name,Command,Location,User,UserSID)
+  ForEach-Object {
+    $command = [string]$_.Command
+    $path = ""
+    if ($command -match '^"([^"]+\\.(exe|com|bat|cmd|vbs|ps1))"') {
+      $path = $matches[1]
+    } elseif ($command -match '^([^\s]+\\.(exe|com|bat|cmd|vbs|ps1))') {
+      $path = $matches[1]
+    }
+    $publisher = ""
+    if ($path -and (Test-Path -LiteralPath $path)) {
+      try { $publisher = (Get-Item -LiteralPath $path -ErrorAction Stop).VersionInfo.CompanyName } catch {}
+    }
+    [pscustomobject]@{
+      Name = $_.Name
+      Command = $_.Command
+      Location = $_.Location
+      User = $_.User
+      UserSID = $_.UserSID
+      Publisher = $publisher
+      Status = "Enabled"
+    }
+  })
 $tasks = @(Get-ScheduledTask -ErrorAction SilentlyContinue |
   Where-Object { $_.TaskPath -notlike '\Microsoft*' } |
   Select-Object TaskName,TaskPath,State)
