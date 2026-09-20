@@ -62,7 +62,8 @@ class JobRunner(QObject):
     def active_count(self):
         return len(self._active_jobs)
 
-    def submit(self, fn, *args, **kwargs):
+    def submit(self, fn, *args, job_priority=0, **kwargs):
+        """Submit one task; higher priority tasks are scheduled first."""
         job = Job(fn, *args, **kwargs)
         self._active_jobs.add(job)
         self._started_at[job] = time.monotonic()
@@ -73,17 +74,27 @@ class JobRunner(QObject):
 
         job.signals.finished.connect(release)
         job.signals.failed.connect(release)
-        self.pool.start(job)
+        self.pool.start(job, int(job_priority))
         return job.signals
 
     def submit_many(self, tasks):
         """Start independent tasks concurrently on the shared worker pool.
 
-        Each task is ``(fn, args, kwargs)``. This is intentionally a low-level
-        primitive: callers must only batch work without ordering/shared-state
-        dependencies. QThreadPool queues excess tasks safely.
+        Each task is ``(fn, args, kwargs)`` or ``(fn, args, kwargs, priority)``.
+        Use priorities to keep interactive/telemetry work responsive while
+        allowing slower inventory work to run in parallel.
         """
-        return [self.submit(fn, *args, **kwargs) for fn, args, kwargs in tasks]
+        signals = []
+        for task in tasks:
+            if len(task) == 3:
+                fn, args, kwargs = task
+                priority = 0
+            elif len(task) == 4:
+                fn, args, kwargs, priority = task
+            else:
+                raise ValueError("tasks must contain 3 or 4 items")
+            signals.append(self.submit(fn, *args, job_priority=priority, **kwargs))
+        return signals
 
     def capacity(self):
         """Return worker-pool capacity for diagnostics and smart scheduling."""
