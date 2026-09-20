@@ -71,15 +71,21 @@ def empty_recycle_bin():
     if r.returncode: raise RuntimeError(r.stderr or "Recycle Bin cleanup failed.")
     return r.stdout or "Recycle Bin emptied."
 
+def _open_settings(uri, label):
+    import os
+    if not hasattr(os, "startfile"):
+        raise RuntimeError("Windows Settings shortcuts are only available on Windows.")
+    try:
+        os.startfile(uri)
+    except OSError as exc:
+        raise RuntimeError(f"Unable to open {label}: {exc}") from exc
+    return f"Opened {label}."
+
 def open_storage_settings():
-    r=run_executable("explorer.exe",("ms-settings:storagesense"),30)
-    if r.returncode: raise RuntimeError(r.stderr or "Unable to open Storage settings.")
-    return "Opened Windows Storage settings."
+    return _open_settings("ms-settings:storagesense", "Windows Storage settings")
 
 def open_cleanup_recommendations():
-    r=run_executable("explorer.exe",("ms-settings:storagerecommendations"),30)
-    if r.returncode: raise RuntimeError(r.stderr or "Unable to open Cleanup recommendations.")
-    return "Opened Windows Cleanup recommendations."
+    return _open_settings("ms-settings:storagerecommendations", "Windows Cleanup recommendations")
 
 def run_disk_cleanup():
     r=run_executable("cleanmgr.exe",("/LOWDISK",),120)
