@@ -1,3 +1,4 @@
+from datetime import datetime
 from PySide6.QtCore import QElapsedTimer, QTimer, Signal
 from PySide6.QtWidgets import (
     QFrame, QHBoxLayout, QLabel, QPlainTextEdit, QProgressBar, QPushButton,
@@ -14,6 +15,8 @@ class ActivityPanel(QFrame):
         super().__init__(parent)
         self.setObjectName("activityPanel")
         self._timer = QElapsedTimer()
+        self._operation_id = None
+        self._started_at = None
 
         root = QVBoxLayout(self)
         root.setContentsMargins(14, 8, 14, 8)
@@ -88,7 +91,8 @@ class ActivityPanel(QFrame):
 
     def append(self, text):
         if text:
-            self.editor.appendPlainText(str(text))
+            stamp = datetime.now().strftime("%H:%M:%S")
+            self.editor.appendPlainText(f"[{stamp}] {text}")
             scrollbar = self.editor.verticalScrollBar()
             scrollbar.setValue(scrollbar.maximum())
 
@@ -103,7 +107,9 @@ class ActivityPanel(QFrame):
         self.summary.hide()
         self._repolish()
 
-    def start(self, title):
+    def start(self, title, operation_id=None):
+        self._operation_id = operation_id
+        self._started_at = datetime.now()
         self._timer.start()
         self.timer.start()
         self.progress.setRange(0, 0)
@@ -123,6 +129,7 @@ class ActivityPanel(QFrame):
         self.state.setProperty("state", "success")
         self.operation.setText(title)
         self.elapsed.setText(self._format_elapsed(elapsed))
+        self._operation_id = None
         self.summary.setText(summary)
         self.summary.setVisible(bool(summary))
         self._repolish()
@@ -136,6 +143,7 @@ class ActivityPanel(QFrame):
         self.state.setProperty("state", "error")
         self.operation.setText(title)
         self.elapsed.setText(self._format_elapsed(elapsed))
+        self._operation_id = None
         self.summary.setText(str(message))
         self.summary.show()
         self.toggle.setChecked(True)
