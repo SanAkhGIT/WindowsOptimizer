@@ -3,11 +3,15 @@ import json
 from PySide6.QtCore import QTimer
 from PySide6.QtWidgets import (
     QDialog, QDialogButtonBox, QFrame, QGridLayout, QHBoxLayout, QLabel,
-    QPushButton, QTextEdit, QVBoxLayout, QWidget,
+    QPushButton, QTextEdit, QVBoxLayout, QWidget, QGroupBox, QTableWidget,
+    QTableWidgetItem, QHeaderView,
 )
 
 from modules.hardware_monitor import live, sensors
 from modules.system_snapshot import snapshot
+from modules.startup_manager import records as startup_records
+from modules.service_manager import inventory as service_inventory
+from modules.services import classify as classify_service, recommendation as service_recommendation
 
 
 class MetricCard(QFrame):
@@ -79,15 +83,41 @@ class SystemDashboard(QWidget):
         self.subtitle.setObjectName("muted")
         root.addWidget(self.subtitle)
 
-        metrics = QGridLayout()
-        metrics.setSpacing(12)
-        self.cpu_card = MetricCard("CPU load", "—", "waiting for telemetry")
-        self.gpu_card = MetricCard("GPU", "—", "waiting for telemetry")
-        self.ram_card = MetricCard("Memory", "—", "waiting for telemetry")
-        self.disk_card = MetricCard("System drive", "—", "waiting for telemetry")
-        for index, card in enumerate((self.cpu_card, self.gpu_card, self.ram_card, self.disk_card)):
-            metrics.addWidget(card, 0, index)
-        root.addLayout(metrics)
+        performance_box = QGroupBox("Performance")
+        performance_box.setObjectName("card")
+        performance_layout = QGridLayout(performance_box)
+        performance_layout.setContentsMargins(12, 14, 12, 12)
+        performance_layout.setSpacing(10)
+        self.performance_cards = []
+        for index in range(8):
+            card = MetricCard("Waiting", "—", "waiting for telemetry")
+            self.performance_cards.append(card)
+            performance_layout.addWidget(card, index // 4, index % 4)
+        root.addWidget(performance_box)
+
+        startup_box = QGroupBox("Startup apps")
+        startup_box.setObjectName("card")
+        startup_layout = QVBoxLayout(startup_box)
+        self.startup_summary = QLabel("Loading startup applications…")
+        self.startup_summary.setObjectName("muted")
+        startup_layout.addWidget(self.startup_summary)
+        self.startup_table = QTableWidget(0, 5)
+        self.startup_table.setHorizontalHeaderLabels(["Name", "Publisher", "Status", "Source", "Impact"])
+        self.startup_table.setSelectionBehavior(QTableWidget.SelectionBehavior.SelectRows)
+        self.startup_table.setEditTriggers(QTableWidget.EditTrigger.NoEditTriggers)
+        self.startup_table.verticalHeader().setVisible(False)
+        self.startup_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
+        self.startup_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
+        self.startup_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.ResizeToContents)
+        self.startup_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
+        self.startup_table.horizontalHeader().setSectionResizeMode(4, QHeaderView.ResizeMode.Stretch)
+        self.startup_table.setMaximumHeight(250)
+        startup_layout.addWidget(self.startup_table)
+        self.service_summary = QLabel("Loading service health…")
+        self.service_summary.setObjectName("muted")
+        self.service_summary.setWordWrap(True)
+        startup_layout.addWidget(self.service_summary)
+        root.addWidget(startup_box)
 
         details = QHBoxLayout()
         details.setSpacing(12)
@@ -188,29 +218,57 @@ class SystemDashboard(QWidget):
         signals.finished.connect(lambda data, g=generation: self._live_done(data, g))
         signals.failed.connect(lambda error, g=generation: self._live_failed(error, g))
 
+    @staticmethod
+    def _rate(value):
+        try:
+            value = float(value)
+        except (TypeError, ValueError):
+            return "0 Kbps"
+        return f"{value / 1024:.0f} Kbps" if value < 1024 * 1024 else f"{value / 1024 / 1024:.1f} Mbps"
+
+    @staticmethod
+    def _card(card, title, value, hint):
+        card.setObjectName("metric")
+        card.layout().itemAt(0).widget().setText(title.upper())
+        card.set_value(value, hint)
+        card.show()
+
     def _live_done(self, data, generation):
         self._live_busy = False
         if self._closing or generation != self._generation:
             return
+
+        cards = self.performance_cards
+        for card in cards:
+            card.hide()
+
         cpu = self._first(data.get("cpu"))
-        gpu = self._first(data.get("gpu"))
-        memory = self._first(data.get("memory"))
-        disk = self._first(data.get("disk"))
+        clock = cpu.get("CurrentClockSpeed") or "—"
+        self._card(cards[0], "CPU", f"{cpu.get('LoadPercentage', '—')}%", f"{clock} MHz • {cpu.get('Name', 'CPU')}")
+        memory = data.get("memory") or {}
+        total = float(memory.get("total") or 0)
+        used = float(memory.get("used") or 0)
+        total_gb = total / 1024**3 if total else 0
+        used_gb = used / 1024**3 if used else 0
+        self._card(cards[1], "Memory", f"{used_gb:.1f}/{total_gb:.1f} GB", f"{memory.get('percent', 0):.0f}% used")
 
-        self.cpu_card.set_value(
-            f"{cpu.get('LoadPercentage', '—')}%",
-            f"{cpu.get('CurrentClockSpeed', '—')} MHz • {cpu.get('Name', 'CPU')}",
-        )
-        self.gpu_card.set_value(gpu.get("Name", "—"), f"Driver {gpu.get('DriverVersion', '—')}")
+        disks = data.get("disks") or []
+        for index, disk in enumerate(disks[:3], start=2):
+            name = disk.get("name") or f"Disk {index - 1}"
+            media = disk.get("fstype") or "Local disk"
+            self._card(cards[index], name, f"{disk.get('percent', 0):.0f}%", f"{media} • {disk.get('free', 0) / 1024**3:.1f} GB free")
 
-        total_kb = float(memory.get("TotalVisibleMemorySize") or 0)
-        free_kb = float(memory.get("FreePhysicalMemory") or 0)
-        used = ((total_kb - free_kb) / total_kb * 100) if total_kb else 0
-        self.ram_card.set_value(f"{used:.0f}%", f"{self._gb((total_kb - free_kb) * 1024)} used")
+        networks = sorted(data.get("network") or [], key=lambda item: item.get("recv_bps", 0) + item.get("sent_bps", 0), reverse=True)
+        if networks:
+            net = networks[0]
+            self._card(cards[5], net.get("name", "Network"), f"↓ {self._rate(net.get('recv_bps'))}", f"↑ {self._rate(net.get('sent_bps'))}")
+        gpus = data.get("gpus") or []
+        for index, gpu in enumerate(gpus[:2], start=6):
+            name = gpu.get("Name") or f"GPU {index - 6}"
+            ram = gpu.get("AdapterRAM")
+            ram_text = f"{float(ram) / 1024**3:.1f} GB dedicated" if ram else "Dedicated memory unavailable"
+            self._card(cards[index], f"GPU {index - 6}", "—", f"{name} • {ram_text}")
 
-        free = self._gb(disk.get("FreeSpace"))
-        size = self._gb(disk.get("Size"))
-        self.disk_card.set_value(free, f"{size} total")
 
     def _live_failed(self, error, generation):
         self._live_busy = False
@@ -264,15 +322,39 @@ class SystemDashboard(QWidget):
         self._inventory_busy = True
         self.refresh_button.setEnabled(False)
         generation = self._generation
-        signals = self.jobs.submit(snapshot, job_priority=-2)
-        signals.finished.connect(lambda data, g=generation: self._inventory_done(data, g))
-        signals.failed.connect(lambda error, g=generation: self._inventory_failed(error, g))
+        self._inventory_pending = 3
+        self._inventory_parts = {"snapshot": None, "startup": None, "services": None, "errors": []}
+        signals = self.jobs.submit_many([
+            (snapshot, (), {}, -2),
+            (startup_records, (), {}, -1),
+            (service_inventory, (), {}, -1),
+        ])
+        for role, signal in zip(("snapshot", "startup", "services"), signals):
+            signal.finished.connect(lambda value, r=role, g=generation: self._inventory_piece_done(r, value, g))
+            signal.failed.connect(lambda error, r=role, g=generation: self._inventory_piece_failed(r, error, g))
 
-    def _inventory_done(self, data, generation):
+    def _inventory_piece_done(self, role, value, generation):
+        if self._closing or generation != self._generation:
+            return
+        self._inventory_parts[role] = value
+        self._inventory_pending -= 1
+        if self._inventory_pending == 0:
+            self._finish_inventory(generation)
+
+    def _inventory_piece_failed(self, role, error, generation):
+        if self._closing or generation != self._generation:
+            return
+        self._inventory_parts["errors"].append(f"{role}: {error}")
+        self._inventory_pending -= 1
+        if self._inventory_pending == 0:
+            self._finish_inventory(generation)
+
+    def _finish_inventory(self, generation):
         self._inventory_busy = False
         if self._closing or generation != self._generation:
             return
         self.refresh_button.setEnabled(True)
+        data = self._inventory_parts.get("snapshot") or {}
         info = data.get("system", {})
         self.identity.setText(
             f"<b>{data.get('hostname', 'Unknown')}</b><br>"
@@ -308,7 +390,6 @@ class SystemDashboard(QWidget):
             self.network.setText("No network adapters returned.")
             self.network_detail.setText("Windows did not return active network configuration.")
 
-
         bios = self._first(data.get("bios"))
         board = self._first(data.get("motherboard"))
         self._hardware_identity = (
@@ -316,11 +397,85 @@ class SystemDashboard(QWidget):
             f"Board: {board.get('Manufacturer', '—')} {board.get('Product', '—')}"
         )
         self.hardware.setText(self._hardware_identity)
-
         driver_count = len(data.get("drivers", [])) if isinstance(data.get("drivers"), list) else 0
         self.drivers.setText(f"{driver_count} signed-driver records returned by Windows.")
-        self._inventory_json = json.dumps(data, indent=2, default=str)
-        self.subtitle.setText("Live telemetry updates every 2 seconds. Static inventory refreshed successfully.")
+
+        startup = self._inventory_parts.get("startup") or {}
+        startup_rows = startup.get("startup", []) if isinstance(startup, dict) else []
+        self.startup_table.setRowCount(len(startup_rows))
+        for row, item in enumerate(startup_rows):
+            command = str(item.get("Command") or item.get("command") or "")
+            publisher = self._publisher(command)
+            values = [
+                item.get("Name", "Unknown"),
+                publisher,
+                "Enabled",
+                item.get("source", "Other"),
+                item.get("impact", "Review"),
+            ]
+            for col, value in enumerate(values):
+                self.startup_table.setItem(row, col, QTableWidgetItem(str(value)))
+        self.startup_summary.setText(
+            f"{len(startup_rows)} startup applications detected. "
+            "This list is separate from Windows services and scheduled tasks."
+        )
+
+        service_raw = self._inventory_parts.get("services") or "[]"
+        try:
+            import json as _json
+            service_rows = _json.loads(service_raw)
+            if isinstance(service_rows, dict):
+                service_rows = [service_rows]
+        except (TypeError, ValueError):
+            service_rows = []
+        running = sum(str(item.get("State", "")).lower() == "running" for item in service_rows)
+        automatic = sum(str(item.get("StartMode", "")).lower() == "auto" for item in service_rows)
+        disabled = sum(str(item.get("StartMode", "")).lower() == "disabled" for item in service_rows)
+        third_party_auto = []
+        for item in service_rows:
+            if str(item.get("StartMode", "")).lower() != "auto":
+                continue
+            classification = classify_service(item)
+            if classification != "Windows":
+                third_party_auto.append(item.get("DisplayName") or item.get("Name") or "Unknown")
+        review_names = ", ".join(third_party_auto[:5])
+        suffix = f"<br>Review candidates: {review_names}" if review_names else ""
+        self.service_summary.setText(
+            f"Services: {len(service_rows)} total • {running} running • "
+            f"{automatic} automatic • {disabled} disabled. "
+            "Third-party automatic services are flagged for review, not automatically classified as bad."
+            + suffix
+        )
+
+        self._inventory_json = json.dumps(
+            {"system": data, "startup": startup, "services": service_rows},
+            indent=2,
+            default=str,
+        )
+        errors = self._inventory_parts.get("errors") or []
+        if errors:
+            self.subtitle.setText("Overview refreshed with warnings: " + " | ".join(errors))
+        else:
+            self.subtitle.setText("Performance, startup apps and service health refreshed successfully.")
+
+    @staticmethod
+    def _publisher(command):
+        import os
+        import re
+        match = re.match(r'^"?([^"]+?\.(?:exe|com|bat|cmd))(?:"|\s|$)', str(command), re.I)
+        if not match:
+            return "Unknown"
+        path = os.path.expandvars(match.group(1))
+        try:
+            return str(getattr(__import__("pathlib").Path(path).stat(), "st_mtime", "")) if False else str(__import__("pefile"))
+        except Exception:
+            pass
+        try:
+            from PySide6.QtCore import QFileInfo
+            info = QFileInfo(path)
+            return info.fileName() if info.exists() else "Unknown"
+        except Exception:
+            return "Unknown"
 
     def _show_inventory_details(self):
         dialog = QDialog(self)
