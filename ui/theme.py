@@ -43,6 +43,15 @@ QLabel#section {
     font-size: 13pt;
     font-weight: 700;
 }
+QLabel#cardMeta {
+    color: #6f8294;
+    font-size: 8.5pt;
+    font-weight: 600;
+}
+QLabel#pageStatus {
+    color: #8fa0b0;
+    padding: 4px 2px;
+}
 QLabel#muted {
     color: #8290a1;
 }
@@ -81,6 +90,11 @@ QPushButton#primary {
     border-color: #2ba7d2;
     color: #ffffff;
     font-weight: 700;
+}
+QPushButton#primary:disabled {
+    background: #10212a;
+    border-color: #1d3946;
+    color: #566b79;
 }
 QPushButton#primary:hover {
     background: #1b91b8;
@@ -141,12 +155,12 @@ QPlainTextEdit#activityLog {
     font-family: "Cascadia Mono", "Consolas";
     font-size: 9pt;
 }
-QFrame#card, QGroupBox#card {
+QWidget#card, QFrame#card, QGroupBox#card {
     background: #101821;
     border: 1px solid #1d2a37;
     border-radius: 13px;
 }
-QFrame#metric, QFrame#updateStat {
+QWidget#card:hover, QFrame#metric, QFrame#updateStat {
     background: #101821;
     border: 1px solid #1d2a37;
     border-radius: 11px;
