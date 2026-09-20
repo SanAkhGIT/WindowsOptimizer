@@ -30,3 +30,37 @@ def test_operation_control_gate_disables_all_pages_and_restores_state():
     MainWindow._set_page_controls_enabled(window, True)
     assert first.isEnabled()
     assert not second.isEnabled()
+
+
+
+def test_profile_manager_receives_recovery_callbacks(monkeypatch):
+    captured = {}
+
+    class FakeDialog:
+        def __init__(self, *args, **kwargs):
+            captured["args"] = args
+            captured["kwargs"] = kwargs
+
+        def exec(self):
+            captured["executed"] = True
+
+    class FakeFeature:
+        state = "Disabled"
+        name = "demo"
+
+    window = MainWindow.__new__(MainWindow)
+    monkeypatch.setattr("app.ProfileManagerDialog", FakeDialog)
+    monkeypatch.setattr("app.feature_inventory", lambda: [FakeFeature()])
+    monkeypatch.setattr("app.power_current", lambda: "balanced")
+    monkeypatch.setattr(
+        window,
+        "_run_job",
+        lambda fn, *args, done=None, fail=None, **kwargs: done({}) if done else None,
+    )
+    monkeypatch.setattr(window, "_show_profile_manager", lambda state: None)
+
+    MainWindow.open_profile_manager(window)
+
+    assert captured["kwargs"]["rollback"] == window.rollback_receipt
+    assert captured["kwargs"]["restore_backup"] == window.restore_backup
+    assert captured["executed"] is True
