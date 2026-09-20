@@ -1,3 +1,5 @@
+import threading
+
 from PySide6.QtCore import QCoreApplication, QEventLoop, QTimer
 
 from core.jobs import JobRunner
@@ -46,20 +48,32 @@ def test_job_runner_reports_failure_and_releases_job():
 def test_job_runner_runs_independent_tasks_in_parallel():
     app = QCoreApplication.instance() or QCoreApplication([])
     runner = JobRunner()
+    barrier = threading.Barrier(3, timeout=2)
     signals = runner.submit_many([
-        (lambda: "one", (), {}),
-        (lambda: "two", (), {}),
-        (lambda: "three", (), {}),
+        (lambda: (barrier.wait(), "one")[1], (), {}),
+        (lambda: (barrier.wait(), "two")[1], (), {}),
+        (lambda: (barrier.wait(), "three")[1], (), {}),
     ])
+
     results = []
+    failures = []
     loop = QEventLoop()
     remaining = {"count": len(signals)}
+
+    def terminal():
+        remaining["count"] -= 1
+        if remaining["count"] == 0:
+            loop.quit()
+
     for signal in signals:
-        signal.finished.connect(results.append)
-        signal.finished.connect(lambda _value: (remaining.__setitem__("count", remaining["count"] - 1), loop.quit() if remaining["count"] == 0 else None))
+        signal.finished.connect(lambda value: (results.append(value), terminal()))
+        signal.failed.connect(lambda error: (failures.append(error), terminal()))
+
     QTimer.singleShot(3000, loop.quit)
     loop.exec()
+
     assert sorted(results) == ["one", "three", "two"]
+    assert failures == []
     assert runner.active_count == 0
     assert runner.capacity()["max_workers"] >= 4
     app.processEvents()
