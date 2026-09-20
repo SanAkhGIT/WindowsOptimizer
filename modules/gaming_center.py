@@ -24,9 +24,9 @@ def inventory():
 $gpu = @(Get-CimInstance Win32_VideoController -ErrorAction SilentlyContinue |
   Select-Object Name,DriverVersion,DriverDate,VideoProcessor,AdapterRAM,Status)
 $game = [pscustomobject]@{
-  GameMode = (Get-ItemPropertyValue -Path 'HKCU:SoftwareMicrosoftGameBar' -Name AutoGameModeEnabled -ErrorAction SilentlyContinue)
-  GameDVR = (Get-ItemPropertyValue -Path 'HKCU:SoftwareMicrosoftWindowsCurrentVersionGameDVR' -Name AppCaptureEnabled -ErrorAction SilentlyContinue)
-  HAGSRaw = (Get-ItemPropertyValue -Path 'HKLM:SYSTEMCurrentControlSetControlGraphicsDrivers' -Name HwSchMode -ErrorAction SilentlyContinue)
+  GameMode = (Get-ItemPropertyValue -Path 'HKCU:\\Software\\Microsoft\\GameBar' -Name AutoGameModeEnabled -ErrorAction SilentlyContinue)
+  GameDVR = (Get-ItemPropertyValue -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\GameDVR' -Name AppCaptureEnabled -ErrorAction SilentlyContinue)
+  HAGSRaw = (Get-ItemPropertyValue -Path 'HKLM:\\SYSTEM\\CurrentControlSet\\Control\\GraphicsDrivers' -Name HwSchMode -ErrorAction SilentlyContinue)
 }
 $os = Get-CimInstance Win32_OperatingSystem | Select-Object Caption,Version,BuildNumber
 $plans = (powercfg /GETACTIVESCHEME) 2>$null
@@ -44,31 +44,31 @@ def parsed_inventory():
     return value if isinstance(value, dict) else {}
 
 
-def open_graphics_settings():
-    result = run_executable("explorer.exe", ("ms-settings:display-advancedgraphics"), 30)
-    if result.returncode:
-        raise RuntimeError(result.stderr or "Unable to open Windows Graphics settings.")
-    return "Opened Windows Graphics settings."
+def _open_settings(uri, label):
+    import os
+    if not hasattr(os, "startfile"):
+        raise RuntimeError("Windows Settings shortcuts are only available on Windows.")
+    try:
+        os.startfile(uri)
+    except OSError as exc:
+        raise RuntimeError(f"Unable to open {label}: {exc}") from exc
+    return f"Opened {label}."
 
+def open_graphics_settings():
+    return _open_settings("ms-settings:display-advancedgraphics", "Windows Graphics settings")
 
 def open_game_mode_settings():
-    result = run_executable("explorer.exe", ("ms-settings:gaming-gamemode"), 30)
-    if result.returncode:
-        raise RuntimeError(result.stderr or "Unable to open Game Mode settings.")
-    return "Opened Windows Game Mode settings."
-
+    return _open_settings("ms-settings:gaming-gamemode", "Windows Game Mode settings")
 
 def open_game_bar_settings():
-    result = run_executable("explorer.exe", ("ms-settings:gaming-gamebar"), 30)
-    if result.returncode:
-        raise RuntimeError(result.stderr or "Unable to open Game Bar settings.")
-    return "Opened Windows Game Bar settings."
-
+    return _open_settings("ms-settings:gaming-gamebar", "Windows Game Bar settings")
 
 def xbox_services():
     script = r"""
-Get-Service -Name XblAuthManager,XboxNetApiSvc,XboxGipSvc,XboxLiveAuthManager,XboxGipSvc -ErrorAction SilentlyContinue |
-  Select-Object Name,Status,StartType |
+$names = @("XblAuthManager","XboxNetApiSvc","XboxGipSvc","XboxLiveAuthManager")
+Get-CimInstance Win32_Service -ErrorAction SilentlyContinue |
+  Where-Object { $_.Name -in $names } |
+  Select-Object Name,State,StartMode |
   Sort-Object Name -Unique |
   ConvertTo-Json -Compress
 """
