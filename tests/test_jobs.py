@@ -63,3 +63,35 @@ def test_job_runner_runs_independent_tasks_in_parallel():
     assert runner.active_count == 0
     assert runner.capacity()["max_workers"] >= 4
     app.processEvents()
+
+def test_task_plan_runs_dependency_graph():
+    app = QCoreApplication.instance() or QCoreApplication([])
+    runner = JobRunner()
+    from core.jobs import TaskPlan, TaskSpec
+    completed = []
+    loop = QEventLoop()
+    plan = TaskPlan([
+        TaskSpec("network", lambda: "network", resource="network"),
+        TaskSpec("storage", lambda: "storage", resource="storage"),
+        TaskSpec("summary", lambda: "summary", depends_on=("network", "storage"), resource="summary"),
+    ])
+    def complete(name, value, error):
+        completed.append((name, value, error))
+        if name == "summary":
+            loop.quit()
+    runner.submit_plan(plan, on_complete=complete)
+    QTimer.singleShot(3000, loop.quit)
+    loop.exec()
+    assert ("summary", "summary", None) in completed
+    assert runner.active_count == 0
+    app.processEvents()
+
+
+def test_task_plan_rejects_unknown_dependency():
+    from core.jobs import TaskPlan, TaskSpec
+    try:
+        TaskPlan([TaskSpec("a", lambda: None, depends_on=("missing",))])
+    except ValueError as exc:
+        assert "Unknown task dependencies" in str(exc)
+    else:
+        raise AssertionError("expected dependency validation failure")
