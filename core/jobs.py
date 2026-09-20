@@ -3,7 +3,7 @@ import time
 import threading
 from dataclasses import dataclass, field
 
-from PySide6.QtCore import QObject, Signal, QRunnable, QThread, QThreadPool
+from PySide6.QtCore import QObject, Signal, QRunnable, QThread, QThreadPool, QTimer
 from core.logging import get_logger, log_exception
 
 
@@ -85,8 +85,9 @@ class TaskPlan:
 class JobRunner(QObject):
     """Shared worker facade.
 
-    A runner owns its jobs until their terminal signal is delivered.  Callers
-    can therefore safely connect UI slots without QRunnable lifetime races.
+    Jobs are queued on the next Qt event-loop turn so callers can connect
+    terminal signals before a very short task completes. This removes a
+    completion-signal race for both UI code and dependency-aware scheduling.
     """
 
     def __init__(self, parent=None):
@@ -114,8 +115,16 @@ class JobRunner(QObject):
 
         job.signals.finished.connect(release)
         job.signals.failed.connect(release)
-        self.pool.start(job, int(job_priority))
+
+        # Do not start synchronously here. A zero-delay timer gives the caller
+        # a chance to connect terminal callbacks before a fast task can finish.
+        QTimer.singleShot(0, lambda: self._start_job(job, int(job_priority)))
         return job.signals
+
+    def _start_job(self, job, priority):
+        if job not in self._active_jobs:
+            return
+        self.pool.start(job, priority)
 
     def submit_many(self, tasks):
         """Start independent tasks concurrently on the shared worker pool.
