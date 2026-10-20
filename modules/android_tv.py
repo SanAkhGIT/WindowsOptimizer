@@ -393,9 +393,20 @@ def health_check(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | 
     managed = []
     changes = read_journal()
     undone_ids = {item.get("change_id") for item in changes if item.get("event") == "undo"}
+    recent_changes = []
     for item in changes:
-        if item.get("event") == "change" and item.get("target") == serial and item.get("kind") in ("package_disabled", "package_enabled") and item.get("id") not in undone_ids:
+        if item.get("event") != "change" or item.get("target") != serial:
+            continue
+        if item.get("kind") in ("package_disabled", "package_enabled") and item.get("id") not in undone_ids:
             managed.append(item)
+        recent_changes.append({
+            "utc": item.get("utc"),
+            "description": item.get("description"),
+            "kind": item.get("kind"),
+            "reversible": item.get("reversible", False),
+            "inverse": item.get("inverse"),
+            "status": "undone" if item.get("id") in undone_ids else "pending",
+        })
     return {
         "connection": {"serial": serial, "state": connection["state"], "connect_output": connection["connect_output"]},
         "device": properties,
@@ -407,6 +418,7 @@ def health_check(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | 
         "settings": settings,
         "background_restrictions": apps,
         "windows_optimizer_changes": managed,
+        "recent_changes": recent_changes[-25:],
         "journal_path": str(journal_path()),
     }
 
