@@ -189,3 +189,28 @@ def test_fizxix_installer_rejects_unexpected_filename_before_connect(tmp_path, m
     with pytest.raises(ValueError, match="FIZXIX-TV-Detox.apk"):
         tv.install_fizxix_home(str(apk))
 
+
+
+def test_half_speed_animation_settings_are_verified_and_reversible(monkeypatch):
+    calls = []
+    recorded = {}
+
+    monkeypatch.setattr(tv, "connect", lambda *a, **k: {
+        "serial": "192.168.1.10:5555", "adb_path": "adb.exe"
+    })
+    monkeypatch.setattr(tv, "_read_setting", lambda adb, serial, namespace, key: "1")
+    def fake_put(adb, serial, namespace, key, value):
+        calls.append((namespace, key, value))
+    monkeypatch.setattr(tv, "_put_setting", fake_put)
+    def fake_record(serial, kind, description, before, after):
+        recorded.update({"serial": serial, "kind": kind, "before": before, "after": after})
+    monkeypatch.setattr(tv, "_record_change", fake_record)
+
+    result = tv.set_animation_scales_half("192.168.1.10", 5555, "adb.exe")
+
+    assert len(calls) == 3
+    assert all(value == "0.5" for _, _, value in calls)
+    assert recorded["kind"] == "settings_batch"
+    assert set(recorded["before"].values()) == {"1"}
+    assert set(recorded["after"].values()) == {"0.5"}
+    assert "saved for Undo" in result
