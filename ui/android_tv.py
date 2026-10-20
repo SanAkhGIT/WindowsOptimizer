@@ -157,7 +157,7 @@ class AndroidTvPanel(QWidget):
         scan.clicked.connect(self.scan_health)
         settings = QPushButton("Open Android Settings")
         settings.clicked.connect(self.open_settings)
-        undo = QPushButton("Undo latest recorded change")
+        undo = QPushButton("Undo latest reversible change")
         undo.clicked.connect(self.undo_last)
         buttons.addWidget(scan)
         buttons.addWidget(settings)
@@ -456,7 +456,7 @@ class AndroidTvPanel(QWidget):
     def undo_last(self):
         if QMessageBox.question(
             self, "Undo latest recorded TV change",
-            "Undo the newest not-yet-undone reversible change for this TV? Newer operations with no inverse are left untouched and listed in the result.",
+            "Undo the newest not-yet-undone reversible change for this TV? Any newer no-inverse operations will remain untouched and be listed in the result.",
         ) == QMessageBox.StandardButton.Yes:
             self._async("Undo latest Android TV change", tv.undo_last_change)
 
