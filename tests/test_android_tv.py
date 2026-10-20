@@ -145,3 +145,47 @@ def test_read_journal_ignores_malformed_lines(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(tv, "journal_path", lambda: path)
     assert [item["event"] for item in tv.read_journal()] == ["change", "undo"]
+
+def test_fizxix_home_component_is_supported():
+    assert tv._tv_home_component(tv.FIZXIX_HOME_PACKAGE) == tv.FIZXIX_HOME_COMPONENT
+
+
+def test_unknown_launcher_package_is_rejected():
+    with pytest.raises(ValueError, match="Unsupported launcher package"):
+        tv._tv_home_component("com.example.untrusted")
+
+
+def test_fizxix_launcher_layout_command_targets_custom_package(monkeypatch):
+    calls = []
+
+    def fake_shell(adb, serial, *args, **kwargs):
+        calls.append((adb, serial, args))
+        return "Starting: Intent"
+
+    monkeypatch.setattr(tv, "_shell", fake_shell)
+    tv._set_tvhome_preferences(
+        "adb.exe",
+        "192.168.1.10:5555",
+        {
+            "apps": "com.netflix.ninja,org.videolan.vlc",
+            "quick": "sound,picture",
+            "launcher_package": tv.FIZXIX_HOME_PACKAGE,
+        },
+    )
+
+    assert calls
+    assert "-n" in calls[0][2]
+    assert tv.FIZXIX_HOME_COMPONENT in calls[0][2]
+
+
+def test_fizxix_installer_rejects_unexpected_filename_before_connect(tmp_path, monkeypatch):
+    apk = tmp_path / "some-other.apk"
+    apk.write_bytes(b"PK" + b"0" * 32)
+
+    def forbidden_connect(*args, **kwargs):
+        raise AssertionError("Must reject the wrong filename before attempting ADB connection.")
+
+    monkeypatch.setattr(tv, "connect", forbidden_connect)
+    with pytest.raises(ValueError, match="FIZXIX-TV-Detox.apk"):
+        tv.install_fizxix_home(str(apk))
+
