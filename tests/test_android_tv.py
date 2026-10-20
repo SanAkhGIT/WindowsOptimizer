@@ -106,6 +106,37 @@ def test_tv_detox_preferences_missing_values_use_auto_defaults():
     assert tv._parse_tvhome_preferences("<map />") == {"apps": None, "quick": None}
 
 
+def test_manual_tvhome_snapshot_normalizes_exact_prior_values():
+    assert tv._normalize_manual_tvhome_preferences({
+        "apps": ["org.smarttube.stable", "com.netflix.ninja"],
+        "quick": ["Sound", "picture"],
+    }) == {
+        "apps": "org.smarttube.stable,com.netflix.ninja",
+        "quick": "sound,picture",
+    }
+
+
+def test_manual_tvhome_snapshot_supports_auto_and_none():
+    assert tv._normalize_manual_tvhome_preferences({"apps": "auto", "quick": "none"}) == {
+        "apps": None,
+        "quick": None,
+    }
+
+
+@pytest.mark.parametrize(
+    "snapshot",
+    [
+        {"apps": ["com.netflix.ninja", "com.netflix.ninja"], "quick": []},
+        {"apps": ["not a package"], "quick": []},
+        {"apps": "auto", "quick": ["wifi"]},
+        {"apps": "auto"},
+    ],
+)
+def test_manual_tvhome_snapshot_rejects_invalid_values(snapshot):
+    with pytest.raises(ValueError):
+        tv._normalize_manual_tvhome_preferences(snapshot)
+
+
 def test_read_journal_ignores_malformed_lines(monkeypatch, tmp_path):
     path = tmp_path / "changes.jsonl"
     path.write_text(
