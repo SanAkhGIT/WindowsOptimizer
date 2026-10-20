@@ -7,10 +7,6 @@ on:
     paths:
       - "scripts/build_fizxix_tv_detox.sh"
       - ".github/workflows/build-fizxix-tv-detox.yml"
-  pull_request:
-    paths:
-      - "scripts/build_fizxix_tv_detox.sh"
-      - ".github/workflows/build-fizxix-tv-detox.yml"
 
 permissions:
   contents: read
