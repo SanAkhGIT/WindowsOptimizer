@@ -60,6 +60,33 @@ jobs:
           script: |
             sh "$RUNNER_TEMP/tv-detox-fizxix/ci/smoke-test.sh" emulator-5554 "$RUNNER_TEMP/fizxix-smoke.png"
 
+      - name: Verify black background in the rendered screenshot
+        run: |
+          python -m pip install --quiet Pillow
+          python - "$RUNNER_TEMP/fizxix-smoke.png" <<'PY'
+          from pathlib import Path
+          import sys
+          from PIL import Image
+
+          image_path = Path(sys.argv[1])
+          if not image_path.is_file():
+              raise SystemExit("Android TV smoke screenshot is missing.")
+          with Image.open(image_path) as image:
+              rgb = image.convert("RGB")
+              width, height = rgb.size
+              samples = {
+                  "top-left": rgb.getpixel((8, 8)),
+                  "top-right": rgb.getpixel((width - 8, 8)),
+                  "bottom-left": rgb.getpixel((8, height - 8)),
+                  "bottom-right": rgb.getpixel((width - 8, height - 8)),
+              }
+          nonblack = {name: value for name, value in samples.items() if value != (0, 0, 0)}
+          print(f"Background corner samples: {samples}")
+          if nonblack:
+              raise SystemExit(f"Expected pure black background corners, got {nonblack}")
+          print("PASS: sampled screen corners are pure black.")
+          PY
+
       - name: Upload emulator screenshot
         if: always()
         uses: actions/upload-artifact@v4
