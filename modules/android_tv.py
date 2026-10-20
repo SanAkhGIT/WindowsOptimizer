@@ -473,6 +473,27 @@ def set_animation_scales_zero(tv_ip: str = "192.168.0.21", port: int = 5555, adb
     return "Animation scales set to 0 and verified. Exact previous values are saved for Undo."
 
 
+def set_animation_scales_half(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
+    """Set animation scales to a moderate 0.5x for users who prefer smoother transitions."""
+    connection = connect(tv_ip, port, adb_path)
+    serial, adb = connection["serial"], connection["adb_path"]
+    before = {f"{namespace}.{key}": _read_setting(adb, serial, namespace, key) for namespace, key in ANIMATION_SETTINGS}
+    applied = []
+    try:
+        for namespace, key in ANIMATION_SETTINGS:
+            applied.append((namespace, key))
+            _put_setting(adb, serial, namespace, key, "0.5")
+    except Exception:
+        for namespace, key in reversed(applied):
+            try:
+                _put_setting(adb, serial, namespace, key, before[f"{namespace}.{key}"])
+            except Exception:
+                pass
+        raise
+    _record_change(serial, "settings_batch", "Set animation scales to 0.5x", before, {f"{namespace}.{key}": "0.5" for namespace, key in ANIMATION_SETTINGS})
+    return "Animation scales set to 0.5x and verified. Exact previous values are saved for Undo."
+
+
 def disable_screensaver(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
