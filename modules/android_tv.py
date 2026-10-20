@@ -535,7 +535,7 @@ def _normalize_manual_tvhome_preferences(value: dict) -> dict:
     if apps is not None:
         if len(apps) > 48 or len(apps) != len(set(apps)):
             raise ValueError("Manual prior app tiles must contain at most 48 unique package IDs.")
-        if any(not re.fullmatch(r"[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+", package) for package in apps):
+        if any(not re.fullmatch(r"[A-Za-z0-9_]+(?:\.[A-Za-z0-9_]+)+", package) for package in apps):
             raise ValueError("Manual prior tile list contains an invalid Android package ID.")
 
     raw_quick = value["quick"]
