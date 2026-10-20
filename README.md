@@ -149,7 +149,7 @@ Run build.bat to produce the Windows executable.
 
    adb -s 192.168.0.21:5555 shell pm enable com.google.android.apps.tv.launcherx
 
-6. Tile/shortcut editing first reads tv-detox's private layout through Android's run-as interface. If the installed release does not permit that, the UI refuses to overwrite an unknown configuration; edit the tiles on the TV by holding OK on a tile instead.
+6. Tile/shortcut editing first reads tv-detox's saved preferences through Android's run-as interface. If the official release blocks that, choose the manual-snapshot mode, enter the current app tile package IDs in exact on-screen order (or explicitly confirm automatic discovery), and mark the current shortcuts. This user-attested snapshot becomes Undo's restore state; do not guess these values. The editor also has Move tile up/down controls to set the new app order. If you cannot establish the current state confidently, edit the tiles on the TV by holding OK on a tile instead.
 7. Reversible changes are recorded in %LOCALAPPDATA%\WindowsOptimizer\android-tv\changes.jsonl. **Undo latest reversible change** replays one exact inverse at a time, newest first. Cache trimming and ART recompilation are recorded as having no automatic inverse; they remain untouched and are named in the undo result while the tool finds the newest reversible change.
 
 Android TV functionality is inspired by and designed to interoperate with [Ansub/tv-detox](https://github.com/Ansub/tv-detox), an MIT-licensed home screen. WindowsOptimizer does not bundle its source; the optional install/update action reads the latest release metadata, verifies the published SHA-256 digest, and only then installs over the existing APK after confirmation. It does not uninstall an incompatible package.
