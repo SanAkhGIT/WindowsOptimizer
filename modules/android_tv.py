@@ -25,6 +25,12 @@ from core.process import run_executable
 
 TV_DETOX_PACKAGE = "com.ansub.tvhome"
 TV_DETOX_COMPONENT = "com.ansub.tvhome/.MainActivity"
+FIZXIX_HOME_PACKAGE = "com.fizxix.tvhome"
+FIZXIX_HOME_COMPONENT = "com.fizxix.tvhome/.MainActivity"
+TV_HOME_COMPONENTS = {
+    TV_DETOX_PACKAGE: TV_DETOX_COMPONENT,
+    FIZXIX_HOME_PACKAGE: FIZXIX_HOME_COMPONENT,
+}
 GOOGLE_TV_LAUNCHER = "com.google.android.apps.tv.launcherx"
 GOOGLE_TV_SETUP = "com.google.android.tungsten.setupwraith"
 GOOGLE_TV_LAUNCHERS = (
@@ -34,6 +40,15 @@ GOOGLE_TV_LAUNCHERS = (
 )
 SETUP_PACKAGES = (GOOGLE_TV_SETUP,)
 TV_DETOX_RELEASE_API = "https://api.github.com/repos/Ansub/tv-detox/releases/latest"
+
+
+def _tv_home_component(package: str) -> str:
+    """Resolve only the two known launcher packages; never accept a caller-supplied component."""
+    try:
+        return TV_HOME_COMPONENTS[package]
+    except KeyError as exc:
+        raise ValueError(f"Unsupported launcher package: {package!r}") from exc
+
 
 # These are review candidates, never automatically selected. The target device must
 # actually contain the package, and the user confirms every individual operation.
@@ -487,8 +502,9 @@ def _parse_tvhome_preferences(xml_text: str) -> dict:
     return result
 
 
-def _read_tvhome_preferences(adb: str, serial: str) -> dict:
-    output = _shell(adb, serial, "run-as", TV_DETOX_PACKAGE, "cat", "shared_prefs/config.xml", check=False)
+def _read_tvhome_preferences(adb: str, serial: str, launcher_package: str = TV_DETOX_PACKAGE) -> dict:
+    _tv_home_component(launcher_package)
+    output = _shell(adb, serial, "run-as", launcher_package, "cat", "shared_prefs/config.xml", check=False)
     if not output or "not debuggable" in output.lower() or "permission denied" in output.lower() or "unknown package" in output.lower():
         raise RuntimeError(
             "Exact tv-detox layout backup is unavailable (the installed release may block run-as). "
@@ -514,19 +530,25 @@ def tv_launchable_apps(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: 
         component = _component_from_output(line.strip())
         if component:
             package = component.split("/", 1)[0]
-            if package != TV_DETOX_PACKAGE and package not in PROTECTED_PACKAGES:
+            if package not in TV_HOME_COMPONENTS and package not in PROTECTED_PACKAGES:
                 packages.add(package)
     return sorted(packages, key=str.casefold)
 
 
-def tv_detox_layout(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> dict:
-    """Return the exact saved app/shortcut preferences or fail closed if unreadable."""
+def tv_detox_layout(
+    tv_ip: str = "192.168.0.21",
+    port: int = 5555,
+    adb_path: str | None = None,
+    launcher_package: str = TV_DETOX_PACKAGE,
+) -> dict:
+    """Return exact saved app/shortcut preferences for a supported launcher."""
+    _tv_home_component(launcher_package)
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
     _, enabled, _ = _package_sets(adb, serial)
-    if TV_DETOX_PACKAGE not in enabled:
-        raise RuntimeError("tv-detox is not installed and enabled on this device.")
-    return _read_tvhome_preferences(adb, serial)
+    if launcher_package not in enabled:
+        raise RuntimeError(f"{launcher_package} is not installed and enabled on this device.")
+    return _read_tvhome_preferences(adb, serial, launcher_package)
 
 
 def _normalize_manual_tvhome_preferences(value: dict) -> dict:
@@ -565,10 +587,12 @@ def _normalize_manual_tvhome_preferences(value: dict) -> dict:
 
 
 def _set_tvhome_preferences(adb: str, serial: str, preferences: dict) -> None:
+    launcher_package = preferences.get("launcher_package", TV_DETOX_PACKAGE)
+    component = _tv_home_component(launcher_package)
     apps = preferences.get("apps") or "auto"
     quick = preferences.get("quick") or "none"
     output = _shell(
-        adb, serial, "am", "start", "-n", TV_DETOX_COMPONENT,
+        adb, serial, "am", "start", "-n", component,
         "--es", "apps", apps,
         "--es", "quick", quick,
         "--es", "stamp", uuid.uuid4().hex,
@@ -585,8 +609,10 @@ def configure_tv_detox(
     tv_ip: str = "192.168.0.21",
     port: int = 5555,
     adb_path: str | None = None,
+    launcher_package: str = TV_DETOX_PACKAGE,
 ) -> str:
-    """Customize tv-detox only when the prior configuration can be backed up exactly."""
+    """Customize a supported launcher only when prior config can be backed up exactly."""
+    component = _tv_home_component(launcher_package)
     allowed_quick = {"bluetooth", "sound", "picture"}
     quick = list(dict.fromkeys((quick_shortcuts or [])))
     if any(item not in allowed_quick for item in quick):
@@ -597,16 +623,17 @@ def configure_tv_detox(
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
     _, enabled, _ = _package_sets(adb, serial)
-    if TV_DETOX_PACKAGE not in enabled:
-        raise RuntimeError("tv-detox is not confirmed enabled. Install or enable it before changing its layout.")
+    if launcher_package not in enabled:
+        raise RuntimeError(f"{launcher_package} is not confirmed enabled. Install or enable it before changing its layout.")
     manual_snapshot_used = False
     try:
-        before = _read_tvhome_preferences(adb, serial)
+        before = _read_tvhome_preferences(adb, serial, launcher_package)
     except RuntimeError:
         if manual_before is None:
             raise
         before = _normalize_manual_tvhome_preferences(manual_before)
         manual_snapshot_used = True
+    before["launcher_package"] = launcher_package
     if selected_apps is not None:
         launchable = set(tv_launchable_apps(tv_ip, port, adb))
         invalid = sorted(set(selected_apps) - launchable)
@@ -616,7 +643,7 @@ def configure_tv_detox(
     quick_value = (before.get("quick") or "none") if quick_shortcuts is None else (",".join(quick) if quick else "none")
     stamp = uuid.uuid4().hex
     output = _shell(
-        adb, serial, "am", "start", "-n", TV_DETOX_COMPONENT,
+        adb, serial, "am", "start", "-n", component,
         "--es", "apps", apps_value,
         "--es", "quick", quick_value,
         "--es", "stamp", stamp,
@@ -801,6 +828,82 @@ def install_or_update_tv_detox(tv_ip: str = "192.168.0.21", port: int = 5555, ad
     if TV_DETOX_PACKAGE in disabled:
         return f"Official tv-detox was installed/updated for {serial}, but remains disabled as before. Enable it explicitly before setting it as Home. No package was uninstalled."
     return f"Installed/updated official tv-detox for {serial}. APK cached at {apk_path}. No package was uninstalled."
+
+
+def install_fizxix_home(
+    apk_path: str,
+    tv_ip: str = "192.168.0.21",
+    port: int = 5555,
+    adb_path: str | None = None,
+) -> str:
+    """Install the separately signed FIZXIX Home APK without replacing official TV Detox."""
+    apk = Path(apk_path).expanduser()
+    if not apk.is_file():
+        raise FileNotFoundError(f"FIZXIX APK file does not exist: {apk}")
+    apk = apk.resolve()
+    if apk.name != "FIZXIX-TV-Detox.apk":
+        raise ValueError("Select the downloaded artifact named exactly 'FIZXIX-TV-Detox.apk'.")
+    size = apk.stat().st_size
+    if size < 25_000 or size > 80 * 1024 * 1024:
+        raise ValueError("Selected APK has an unexpected size; no device action was taken.")
+    with apk.open("rb") as handle:
+        if handle.read(2) != b"PK":
+            raise ValueError("Selected file is not a valid APK/ZIP container.")
+    connection = connect(tv_ip, port, adb_path)
+    serial, adb = connection["serial"], connection["adb_path"]
+    result = _run_adb(adb, ("-s", serial, "install", "-r", str(apk)), timeout=180, check=False)
+    if "success" not in result.lower():
+        raise RuntimeError(
+            "FIZXIX Home installation failed. The original TV Detox app was not uninstalled. "
+            "If Android reports UPDATE_INCOMPATIBLE for a previous FIZXIX build, that build was signed "
+            "with another key; remove only the old FIZXIX Home app from TV Settings after reviewing its data. "
+            f"ADB said: {result}"
+        )
+    installed, enabled, disabled = _package_sets(adb, serial)
+    if FIZXIX_HOME_PACKAGE not in installed:
+        raise RuntimeError(
+            "ADB reported a successful install, but com.fizxix.tvhome is not installed. "
+            "Confirm you selected the FIZXIX-TV-Detox.apk artifact."
+        )
+    _record_change(
+        serial, "irreversible", "Install FIZXIX Home APK", None,
+        {"package": FIZXIX_HOME_PACKAGE, "apk": str(apk)}, reversible=False,
+    )
+    if FIZXIX_HOME_PACKAGE in disabled:
+        return f"FIZXIX Home was installed on {serial}, but remains disabled. Enable it before selecting it as Home."
+    return f"FIZXIX Home was installed on {serial}. Official TV Detox and Google TV Home were left untouched."
+
+
+def set_fizxix_home(
+    tv_ip: str = "192.168.0.21",
+    port: int = 5555,
+    adb_path: str | None = None,
+) -> str:
+    """Set the separately installed FIZXIX launcher as Home, retaining the prior Home for Undo."""
+    connection = connect(tv_ip, port, adb_path)
+    serial, adb = connection["serial"], connection["adb_path"]
+    _, enabled, _ = _package_sets(adb, serial)
+    if FIZXIX_HOME_PACKAGE not in enabled:
+        raise RuntimeError("FIZXIX Home is not installed and enabled. Install it first; no Home change was made.")
+    previous = _home_component(adb, serial)
+    if not previous:
+        raise RuntimeError("Android did not resolve the current Home activity; refusing to change Home.")
+    try:
+        _set_home_component(adb, serial, FIZXIX_HOME_COMPONENT)
+    except Exception as exc:
+        try:
+            _set_home_component(adb, serial, previous)
+        except Exception as rollback_exc:
+            raise RuntimeError(
+                f"FIZXIX Home switch failed ({exc}) and rollback also failed ({rollback_exc}). "
+                f"Recovery: adb -s {serial} shell pm enable {GOOGLE_TV_LAUNCHER}"
+            ) from exc
+        raise RuntimeError(f"FIZXIX Home switch failed and the previous Home was restored: {exc}") from exc
+    _record_change(
+        serial, "tvhome_home", "Set FIZXIX Home as Android Home",
+        {"home": previous}, {"home": FIZXIX_HOME_COMPONENT, "launcher_package": FIZXIX_HOME_PACKAGE},
+    )
+    return f"FIZXIX Home is now the default Home ({FIZXIX_HOME_COMPONENT}). Official TV Detox and Google TV Home remain installed."
 
 
 def run_cache_trim(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
