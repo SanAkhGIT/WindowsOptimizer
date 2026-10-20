@@ -407,7 +407,23 @@ class AndroidTvPanel(QWidget):
         if answer != QMessageBox.StandardButton.Yes:
             return
         action = tv.enable_package if restore else tv.disable_package
-        self._async(f"{verb.title()} {package}", lambda **p: action(package, **p))
+        label = f"{verb.title()} {package}"
+        try:
+            params = self._params()
+        except Exception as exc:
+            QMessageBox.warning(self, "Connection details", str(exc))
+            return
+        self.connection_status.setText(f"Working: {label}…")
+        self.run_job(
+            lambda: action(package, **params),
+            done=lambda value: self._package_change_done(label, value),
+            fail=lambda error: self._show_error(label, error),
+            label=label,
+        )
+
+    def _package_change_done(self, label, value):
+        self._show_result(label, value)
+        self.refresh_candidates()
 
     def disable_animations(self):
         if QMessageBox.question(
@@ -440,7 +456,7 @@ class AndroidTvPanel(QWidget):
     def undo_last(self):
         if QMessageBox.question(
             self, "Undo latest recorded TV change",
-            "Undo the newest not-yet-undone reversible change for this TV? If the newest operation has no inverse, no earlier operation will be undone.",
+            "Undo the newest not-yet-undone reversible change for this TV? Newer operations with no inverse are left untouched and listed in the result.",
         ) == QMessageBox.StandardButton.Yes:
             self._async("Undo latest Android TV change", tv.undo_last_change)
 
@@ -455,9 +471,15 @@ class AndroidTvPanel(QWidget):
             self._async("Install / update tv-detox", tv.install_or_update_tv_detox)
 
     def set_tvdetox_home(self):
+        try:
+            params = self._params()
+            serial = tv.target_serial(params["tv_ip"], params["port"])
+        except Exception as exc:
+            QMessageBox.warning(self, "Connection details", str(exc))
+            return
         if QMessageBox.question(
             self, "Set tv-detox as Home",
-            "Make com.ansub.tvhome/.MainActivity the default Home?\n\nThe current Home is captured for Undo. No launcher or setup package will be disabled. If verification fails, the script attempts to restore the previous Home.\n\nEmergency command if the stock launcher needs recovery:\nadb -s 192.168.0.21:5555 shell pm enable com.google.android.apps.tv.launcherx",
+            "Make com.ansub.tvhome/.MainActivity the default Home?\n\nThe current Home is captured for Undo. No launcher or setup package will be disabled. If verification fails, the previous Home is restored when possible.\n\nEmergency launcher recovery command:\nadb -s " + serial + " shell pm enable com.google.android.apps.tv.launcherx",
         ) == QMessageBox.StandardButton.Yes:
             self._async("Set tv-detox as Home", tv.set_tv_detox_home)
 
