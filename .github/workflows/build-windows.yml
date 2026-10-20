@@ -57,6 +57,7 @@ jobs:
             dist/FIZXIX-TV-Detox.apk
             dist/FIZXIX-TV-Detox-LICENSE.txt
             dist/FIZXIX-TV-Detox-NOTICE.txt
+            dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt
           if-no-files-found: error
           retention-days: 1
 
