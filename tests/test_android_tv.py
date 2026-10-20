@@ -9,6 +9,10 @@ def test_target_serial_uses_fixed_classic_adb_port():
     assert tv.target_serial("192.168.0.21", 5555) == "192.168.0.21:5555"
 
 
+def test_target_serial_brackets_ipv6_endpoint():
+    assert tv.target_serial("fd00::21", 5555) == "[fd00::21]:5555"
+
+
 def test_target_serial_rejects_ip_with_appended_port():
     with pytest.raises(ValueError):
         tv.target_serial("192.168.0.21:5555", 5555)
@@ -25,6 +29,16 @@ def test_package_list_parser_only_returns_package_names():
     assert tv.parse_package_list(
         "package:com.example.one\nnot-a-package\npackage:com.example.two\n"
     ) == {"com.example.one", "com.example.two"}
+
+
+def test_release_digest_verification():
+    import hashlib
+
+    data = b"official release payload"
+    digest = "sha256:" + hashlib.sha256(data).hexdigest()
+    assert tv.sha256_matches(data, digest)
+    assert not tv.sha256_matches(data, "sha256:" + "0" * 64)
+    assert not tv.sha256_matches(data, "md5:invalid")
 
 
 def test_meminfo_parser_does_not_merge_unrelated_digits():
