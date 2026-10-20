@@ -278,47 +278,43 @@ class AndroidTvPanel(QWidget):
         note.setWordWrap(True)
         layout.addWidget(note)
 
+        # One unified launcher workflow. FIZXIX Home is the default branded option;
+        # official TV Detox remains available for users who explicitly choose it.
+        launcher_group = QGroupBox("Home launcher")
+        launcher_layout = QVBoxLayout(launcher_group)
+        launcher_choice_row = QHBoxLayout()
+        launcher_choice_row.addWidget(QLabel("Preferred launcher:"))
+        self.install_target = QComboBox()
+        self.install_target.addItem("FIZXIX Home — black background + watermark", tv.FIZXIX_HOME_PACKAGE)
+        self.install_target.addItem("Official TV Detox", tv.TV_DETOX_PACKAGE)
+        launcher_choice_row.addWidget(self.install_target, 1)
+        launcher_layout.addLayout(launcher_choice_row)
+
+        launcher_help = QLabel(
+            "FIZXIX Home is the recommended branded launcher. Install/update and Home switching are "
+            "handled here alongside device health and optimization. Google TV Home remains installed "
+            "so you can restore it at any time."
+        )
+        launcher_help.setObjectName("muted")
+        launcher_help.setWordWrap(True)
+        launcher_layout.addWidget(launcher_help)
+
         actions = QHBoxLayout()
-        install = QPushButton("Install / update tv-detox")
-        install.clicked.connect(self.install_tvdetox)
+        install = QPushButton("Install / update selected launcher…")
         install.setObjectName("primary")
-        tvhome = QPushButton("Set tv-detox as Home")
-        tvhome.clicked.connect(self.set_tvdetox_home)
+        install.clicked.connect(self.install_selected_launcher)
+        make_home = QPushButton("Set selected launcher as Home")
+        make_home.clicked.connect(self.set_selected_launcher_home)
         stock = QPushButton("Restore Google TV Home")
         stock.clicked.connect(self.restore_stock_home)
         settings = QPushButton("Open Settings")
         settings.clicked.connect(self.open_settings)
         actions.addWidget(install)
-        actions.addWidget(tvhome)
+        actions.addWidget(make_home)
         actions.addWidget(stock)
         actions.addWidget(settings)
-        layout.addLayout(actions)
-
-        fizxix_group = QGroupBox("FIZXIX Home — black background + watermark")
-        fizxix_layout = QVBoxLayout(fizxix_group)
-        fizxix_note = QLabel(
-            "Build the FIZXIX-TV-Detox artifact from the WindowsOptimizer GitHub Actions workflow, "
-            "extract FIZXIX-TV-Detox.apk, then select it below. It installs as a separate launcher; "
-            "the official TV Detox app and Google TV Home are not uninstalled."
-        )
-        fizxix_note.setObjectName("muted")
-        fizxix_note.setWordWrap(True)
-        fizxix_layout.addWidget(fizxix_note)
-        build_link = QLabel(
-            '<a href="https://github.com/SanAkhGIT/WindowsOptimizer/actions/workflows/build-fizxix-tv-detox.yml">'
-            "Open FIZXIX APK build workflow</a>"
-        )
-        build_link.setOpenExternalLinks(True)
-        fizxix_layout.addWidget(build_link)
-        fizxix_row = QHBoxLayout()
-        install_fizxix = QPushButton("Install FIZXIX Home APK…")
-        install_fizxix.clicked.connect(self.install_fizxix_home)
-        set_fizxix = QPushButton("Set FIZXIX Home as Home")
-        set_fizxix.clicked.connect(self.set_fizxix_home)
-        fizxix_row.addWidget(install_fizxix)
-        fizxix_row.addWidget(set_fizxix)
-        fizxix_layout.addLayout(fizxix_row)
-        layout.addWidget(fizxix_group)
+        launcher_layout.addLayout(actions)
+        layout.addWidget(launcher_group)
 
         custom = QGroupBox("Launcher app tiles and shortcuts")
         custom_layout = QVBoxLayout(custom)
@@ -548,63 +544,73 @@ class AndroidTvPanel(QWidget):
     def open_settings(self):
         self._async("Open Android Settings", tv.open_tv_settings)
 
-    def install_tvdetox(self):
-        if QMessageBox.question(
-            self, "Install / update tv-detox",
-            "Download tvhome.apk from the official Ansub/tv-detox GitHub release over HTTPS and install it with adb install -r?\n\nThe existing app will not be uninstalled. An incompatible signing key will stop the operation.",
-        ) == QMessageBox.StandardButton.Yes:
-            self._async("Install / update tv-detox", tv.install_or_update_tv_detox)
-
-    def install_fizxix_home(self):
-        path, _ = QFileDialog.getOpenFileName(
-            self,
-            "Select FIZXIX-TV-Detox.apk",
-            "",
-            "FIZXIX TV Detox APK (FIZXIX-TV-Detox.apk)",
-        )
-        if not path:
-            return
-        if Path(path).name != "FIZXIX-TV-Detox.apk":
-            QMessageBox.warning(
+    def install_selected_launcher(self):
+        package = self.install_target.currentData()
+        if package == tv.FIZXIX_HOME_PACKAGE:
+            path, _ = QFileDialog.getOpenFileName(
                 self,
-                "Unexpected APK filename",
-                "Select the FIZXIX-TV-Detox.apk file from the WindowsOptimizer GitHub Actions artifact.",
+                "Select the FIZXIX Home APK",
+                "",
+                "Android package (FIZXIX-TV-Detox.apk)",
+            )
+            if not path:
+                return
+            if Path(path).name != "FIZXIX-TV-Detox.apk":
+                QMessageBox.warning(
+                    self,
+                    "Unexpected APK",
+                    "Select FIZXIX-TV-Detox.apk from a successful WindowsOptimizer build artifact.",
+                )
+                return
+            try:
+                params = self._params()
+            except Exception as exc:
+                QMessageBox.warning(self, "Connection details", str(exc))
+                return
+            answer = QMessageBox.question(
+                self,
+                "Install / update FIZXIX Home",
+                "Install FIZXIX Home (com.fizxix.tvhome)?\n\n"
+                "Google TV Home remains installed. If Android reports UPDATE_INCOMPATIBLE, stop; "
+                "this means the APK signing key differs. Windows Optimizer will not uninstall apps automatically.",
+            )
+            if answer != QMessageBox.StandardButton.Yes:
+                return
+            self.connection_status.setText("Working: install / update FIZXIX Home…")
+            self.run_job(
+                lambda: tv.install_fizxix_home(path, **params),
+                done=lambda value: self._show_result("Install / update FIZXIX Home", value),
+                fail=lambda error: self._show_error("Install / update FIZXIX Home", error),
+                label="Install / update FIZXIX Home",
             )
             return
-        try:
-            params = self._params()
-        except Exception as exc:
-            QMessageBox.warning(self, "Connection details", str(exc))
-            return
-        answer = QMessageBox.question(
-            self,
-            "Install FIZXIX Home",
-            "Install the selected APK as a separate launcher (com.fizxix.tvhome)?\n\n"
-            "Only select the FIZXIX-TV-Detox.apk built by this repository. "
-            "This does not uninstall official TV Detox or disable Google TV Home. "
-            "The launcher will not become default until you choose Set FIZXIX Home as Home.\n\n"
-            "If updating a previous FIZXIX build reports UPDATE_INCOMPATIBLE, stop; "
-            "the signing key differs and no app will be uninstalled automatically.",
-        )
-        if answer != QMessageBox.StandardButton.Yes:
-            return
-        self.connection_status.setText("Working: install FIZXIX Home…")
-        self.run_job(
-            lambda: tv.install_fizxix_home(path, **params),
-            done=lambda value: self._show_result("Install FIZXIX Home", value),
-            fail=lambda error: self._show_error("Install FIZXIX Home", error),
-            label="Install FIZXIX Home",
-        )
 
-    def set_fizxix_home(self):
-        if QMessageBox.question(
-            self,
-            "Set FIZXIX Home as Home",
-            "Make com.fizxix.tvhome/.MainActivity the default launcher?\n\n"
-            "The current Home is recorded for Undo. Google TV Home and official TV Detox stay installed. "
-            "If switching fails, the previous Home is restored when possible.",
-        ) == QMessageBox.StandardButton.Yes:
-            self._async("Set FIZXIX Home as Home", tv.set_fizxix_home)
+        if package == tv.TV_DETOX_PACKAGE:
+            if QMessageBox.question(
+                self,
+                "Install / update Official TV Detox",
+                "Download the official Ansub/tv-detox release over HTTPS and install it with ADB? "
+                "The existing app will not be uninstalled.",
+            ) == QMessageBox.StandardButton.Yes:
+                self._async("Install / update Official TV Detox", tv.install_or_update_tv_detox)
+            return
+
+        QMessageBox.warning(self, "Unsupported launcher", "Select a supported launcher.")
+
+    def set_selected_launcher_home(self):
+        package = self.install_target.currentData()
+        if package == tv.FIZXIX_HOME_PACKAGE:
+            if QMessageBox.question(
+                self,
+                "Set FIZXIX Home as Home",
+                "Make FIZXIX Home the active Home launcher?\n\n"
+                "The current Home is recorded for Undo. Google TV Home remains installed and can be restored.",
+            ) == QMessageBox.StandardButton.Yes:
+                self._async("Set FIZXIX Home as Home", tv.set_fizxix_home)
+        elif package == tv.TV_DETOX_PACKAGE:
+            self.set_tvdetox_home()
+        else:
+            QMessageBox.warning(self, "Unsupported launcher", "Select a supported launcher.")
 
     def set_tvdetox_home(self):
         try:
