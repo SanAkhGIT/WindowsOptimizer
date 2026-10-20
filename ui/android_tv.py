@@ -528,6 +528,17 @@ class AndroidTvPanel(QWidget):
         ) == QMessageBox.StandardButton.Yes:
             self._async("Restore Google TV Home", tv.restore_google_tv_home)
 
+    def _manual_backup_changed(self, checked):
+        if hasattr(self, "manual_backup_group"):
+            self.manual_backup_group.setEnabled(checked)
+        if hasattr(self, "apply_layout_button"):
+            self.apply_layout_button.setEnabled(
+                self._layout_loaded and (self._layout_readable or checked)
+            )
+
+    def _manual_current_auto_changed(self, checked):
+        self.manual_current_apps.setEnabled(not checked)
+
     def load_tv_layout(self):
         try:
             params = self._params()
@@ -536,9 +547,18 @@ class AndroidTvPanel(QWidget):
             return
         self.connection_status.setText("Working: read tv-detox layout…")
         def task():
-            prefs = tv.tv_detox_layout(**params)
             packages = tv.tv_launchable_apps(**params)
-            return {"preferences": prefs, "packages": packages}
+            try:
+                prefs = tv.tv_detox_layout(**params)
+                return {"preferences": prefs, "packages": packages, "layout_error": None}
+            except RuntimeError as exc:
+                message = str(exc)
+                if (
+                    "Exact tv-detox layout backup is unavailable" in message
+                    or "Could not parse tv-detox's saved layout" in message
+                ):
+                    return {"preferences": None, "packages": packages, "layout_error": message}
+                raise
         self.run_job(
             task,
             done=self._populate_tv_layout,
@@ -549,8 +569,11 @@ class AndroidTvPanel(QWidget):
     def _populate_tv_layout(self, result):
         prefs = result["preferences"]
         packages = result["packages"]
-        saved_apps = prefs.get("apps")
-        saved_quick = (prefs.get("quick") or "").replace(" ", "").split(",") if prefs.get("quick") else []
+        layout_error = result.get("layout_error")
+        self._layout_readable = prefs is not None
+
+        saved_apps = prefs.get("apps") if prefs else None
+        saved_quick = (prefs.get("quick") or "").replace(" ", "").split(",") if prefs and prefs.get("quick") else []
         if saved_apps:
             saved_app_set = {value.strip() for value in saved_apps.split(",") if value.strip()}
         else:
@@ -569,25 +592,88 @@ class AndroidTvPanel(QWidget):
                 item.setText(f"{package}  (not found by current launcher query)")
             self.apps_list.addItem(item)
 
-        self.auto_apps.setChecked(not bool(saved_apps))
-        self.quick_bluetooth.setChecked("bluetooth" in saved_quick)
-        self.quick_sound.setChecked("sound" in saved_quick)
-        self.quick_picture.setChecked("picture" in saved_quick)
+        if self._layout_readable:
+            self.auto_apps.setChecked(not bool(saved_apps))
+            self.quick_bluetooth.setChecked("bluetooth" in saved_quick)
+            self.quick_sound.setChecked("sound" in saved_quick)
+            self.quick_picture.setChecked("picture" in saved_quick)
+            self.manual_current_auto.setChecked(not bool(saved_apps))
+            self.manual_current_apps.setText(saved_apps or "")
+            self.manual_quick_bluetooth.setChecked("bluetooth" in saved_quick)
+            self.manual_quick_sound.setChecked("sound" in saved_quick)
+            self.manual_quick_picture.setChecked("picture" in saved_quick)
+            self.manual_backup_toggle.setChecked(False)
+            self.manual_backup_toggle.setEnabled(False)
+            self.manual_backup_group.setEnabled(False)
+            self.connection_status.setText(
+                f"Loaded {len(packages)} launchable app package(s); previous layout is readable and will be backed up automatically."
+            )
+            report = "CURRENT TV-DETOX LAYOUT\n" + json.dumps(prefs, indent=2)
+        else:
+            # Some official release builds are not debuggable, so Android's run-as
+            # cannot read private SharedPreferences. Offer a manual, user-attested
+            # rollback snapshot instead of making UI editing impossible or guessing.
+            self.auto_apps.setChecked(False)
+            self.quick_bluetooth.setChecked(False)
+            self.quick_sound.setChecked(False)
+            self.quick_picture.setChecked(False)
+            self.manual_current_auto.setChecked(False)
+            self.manual_current_apps.clear()
+            self.manual_quick_bluetooth.setChecked(False)
+            self.manual_quick_sound.setChecked(False)
+            self.manual_quick_picture.setChecked(False)
+            self.manual_backup_toggle.setChecked(False)
+            self.manual_backup_toggle.setEnabled(True)
+            self.manual_backup_group.setEnabled(False)
+            self.connection_status.setText(
+                f"Loaded {len(packages)} app candidate(s); current saved layout is not readable. Manual backup is required before Apply."
+            )
+            report = (
+                "TV-DETOX SAVED LAYOUT NOT READABLE\n"
+                + (layout_error or "The installed APK did not expose its saved preferences.")
+                + "\n\nThe available TV app packages are listed below. To enable Windows-side tile editing, "
+                "select the manual snapshot option and enter the CURRENT app tile package IDs in on-screen order "
+                "(or confirm current automatic discovery) and currently enabled tv-detox shortcuts. "
+                "Do not guess: Undo uses the values you enter.\n\n"
+                + "\n".join(packages)
+            )
         self._layout_loaded = True
-        self.apply_layout_button.setEnabled(True)
-        self.connection_status.setText(
-            f"Loaded {len(packages)} launchable app package(s); prior layout is readable and backed-up on apply."
-        )
-        self.output.setPlainText(
-            "CURRENT TV-DETOX LAYOUT\n"
-            + json.dumps(prefs, indent=2)
-            + f"\n\nLaunchable package count: {len(packages)}"
-        )
+        self.apply_layout_button.setEnabled(self._layout_readable)
+        self.output.setPlainText(report + f"\n\nLaunchable package count: {len(packages)}")
 
     def apply_tv_layout(self):
         if not self._layout_loaded:
-            QMessageBox.information(self, "Load first", "Load the current tv-detox layout first so its exact prior configuration can be backed up.")
+            QMessageBox.information(self, "Load first", "Load the current tv-detox layout first so the current state can be backed up.")
             return
+        manual_before = None
+        if not self._layout_readable:
+            if not self.manual_backup_toggle.isChecked():
+                QMessageBox.warning(
+                    self, "Backup required",
+                    "This release of tv-detox does not expose its saved preferences. Enable the manual snapshot "
+                    "and enter the verified current app order/shortcuts before applying any UI change.",
+                )
+                return
+            if self.manual_current_auto.isChecked():
+                previous_apps = None
+            else:
+                current_text = self.manual_current_apps.text().strip()
+                if not current_text:
+                    QMessageBox.warning(
+                        self, "Current layout required",
+                        "Enter the current app package IDs in exact on-screen order, or check that the current app row uses automatic discovery.",
+                    )
+                    return
+                previous_apps = [part.strip() for part in current_text.split(",") if part.strip()]
+            previous_quick = []
+            if self.manual_quick_bluetooth.isChecked():
+                previous_quick.append("bluetooth")
+            if self.manual_quick_sound.isChecked():
+                previous_quick.append("sound")
+            if self.manual_quick_picture.isChecked():
+                previous_quick.append("picture")
+            manual_before = {"apps": previous_apps, "quick": previous_quick}
+
         apps = [] if self.auto_apps.isChecked() else [
             item.data(Qt.ItemDataRole.UserRole)
             for index in range(self.apps_list.count())
@@ -604,12 +690,22 @@ class AndroidTvPanel(QWidget):
         if not self.auto_apps.isChecked() and not apps:
             QMessageBox.warning(self, "No app tiles selected", "Select at least one TV app tile or enable automatic app discovery.")
             return
+
+        if manual_before is None:
+            backup_summary = "Prior preferences will be read directly from tv-detox and saved for Undo."
+        else:
+            backup_summary = (
+                "Manual rollback snapshot (you confirm these match the current TV):\n"
+                + ("Apps: automatic discovery" if manual_before["apps"] is None else "Apps in order: " + ", ".join(manual_before["apps"]))
+                + "\nShortcuts: " + (", ".join(manual_before["quick"]) if manual_before["quick"] else "none")
+            )
         answer = QMessageBox.question(
             self, "Apply tv-detox UI layout",
             "Apply this app tile and shortcut configuration?\n\n"
             + ("App tiles: automatic discovery" if self.auto_apps.isChecked() else "App tiles: " + ", ".join(apps))
             + "\nShortcuts: " + (", ".join(quick) if quick else "none")
-            + "\n\nThe existing layout must be readable; its exact prior preferences are stored for Undo.",
+            + "\n\n" + backup_summary
+            + "\n\nThe change will be journaled and can be undone using this snapshot.",
         )
         if answer != QMessageBox.StandardButton.Yes:
             return
@@ -619,12 +715,14 @@ class AndroidTvPanel(QWidget):
             params = self._params()
         except Exception as exc:
             QMessageBox.warning(self, "Connection details", str(exc))
-            self.apply_layout_button.setEnabled(True)
             self._layout_loaded = True
+            self.apply_layout_button.setEnabled(self._layout_readable or self.manual_backup_toggle.isChecked())
             return
         self.connection_status.setText("Working: apply tv-detox UI layout…")
         self.run_job(
-            lambda: tv.configure_tv_detox(apps=apps, quick_shortcuts=quick, **params),
+            lambda: tv.configure_tv_detox(
+                apps=apps, quick_shortcuts=quick, manual_before=manual_before, **params
+            ),
             done=lambda value: self._layout_apply_done(value),
             fail=lambda error: self._layout_apply_failed(error),
             label="Apply tv-detox UI layout",
@@ -636,4 +734,5 @@ class AndroidTvPanel(QWidget):
 
     def _layout_apply_failed(self, error):
         self._show_error("Apply tv-detox UI layout", error)
-        self.apply_layout_button.setEnabled(True)
+        self._layout_loaded = True
+        self.apply_layout_button.setEnabled(self._layout_readable or self.manual_backup_toggle.isChecked())
