@@ -1,5 +1,6 @@
 """PySide6 Android TV workspace: read-first diagnostics and confirmed ADB actions."""
 import json
+import sys
 from pathlib import Path
 
 from PySide6.QtCore import Qt
@@ -547,19 +548,18 @@ class AndroidTvPanel(QWidget):
     def install_selected_launcher(self):
         package = self.install_target.currentData()
         if package == tv.FIZXIX_HOME_PACKAGE:
-            path, _ = QFileDialog.getOpenFileName(
-                self,
-                "Select the FIZXIX Home APK",
-                "",
-                "Android package (FIZXIX-TV-Detox.apk)",
+            bundle_root = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent.parent))
+            candidates = (
+                bundle_root / "build_assets" / "FIZXIX-TV-Detox.apk",
+                Path(__file__).resolve().parent.parent / "build_assets" / "FIZXIX-TV-Detox.apk",
+                Path(__file__).resolve().parent.parent / "dist" / "FIZXIX-TV-Detox.apk",
             )
-            if not path:
-                return
-            if Path(path).name != "FIZXIX-TV-Detox.apk":
+            apk_path = next((candidate for candidate in candidates if candidate.is_file() and candidate.stat().st_size > 25_000), None)
+            if apk_path is None:
                 QMessageBox.warning(
                     self,
-                    "Unexpected APK",
-                    "Select FIZXIX-TV-Detox.apk from a successful WindowsOptimizer build artifact.",
+                    "FIZXIX Home payload missing",
+                    "This build does not contain the FIZXIX Home APK. Download the latest WindowsOptimizer-windows-x64 build from GitHub Actions.",
                 )
                 return
             try:
@@ -570,15 +570,16 @@ class AndroidTvPanel(QWidget):
             answer = QMessageBox.question(
                 self,
                 "Install / update FIZXIX Home",
-                "Install FIZXIX Home (com.fizxix.tvhome)?\n\n"
+                "Install the bundled FIZXIX Home (com.fizxix.tvhome)?\\n\\n"
+                "The APK ships with Windows Optimizer, so no separate file selection is needed. "
                 "Google TV Home remains installed. If Android reports UPDATE_INCOMPATIBLE, stop; "
-                "this means the APK signing key differs. Windows Optimizer will not uninstall apps automatically.",
+                "the signing key differs and no app will be uninstalled automatically.",
             )
             if answer != QMessageBox.StandardButton.Yes:
                 return
             self.connection_status.setText("Working: install / update FIZXIX Home…")
             self.run_job(
-                lambda: tv.install_fizxix_home(path, **params),
+                lambda: tv.install_fizxix_home(str(apk_path), **params),
                 done=lambda value: self._show_result("Install / update FIZXIX Home", value),
                 fail=lambda error: self._show_error("Install / update FIZXIX Home", error),
                 label="Install / update FIZXIX Home",
