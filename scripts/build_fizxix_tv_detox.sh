@@ -128,7 +128,7 @@ activity.write_text(content, encoding="utf-8")
 
 # Route the remote's Settings/Menu key directly to Bluetooth settings, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
-method_anchor = "    @Override\\n    protected void onCreate(Bundle state) {"
+method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
 settings_method = """    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_SETTINGS || keyCode == KeyEvent.KEYCODE_MENU) {
