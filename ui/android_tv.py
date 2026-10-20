@@ -304,6 +304,12 @@ class AndroidTvPanel(QWidget):
         fizxix_note.setObjectName("muted")
         fizxix_note.setWordWrap(True)
         fizxix_layout.addWidget(fizxix_note)
+        build_link = QLabel(
+            '<a href="https://github.com/SanAkhGIT/WindowsOptimizer/actions/workflows/build-fizxix-tv-detox.yml">'
+            "Open FIZXIX APK build workflow</a>"
+        )
+        build_link.setOpenExternalLinks(True)
+        fizxix_layout.addWidget(build_link)
         fizxix_row = QHBoxLayout()
         install_fizxix = QPushButton("Install FIZXIX Home APK…")
         install_fizxix.clicked.connect(self.install_fizxix_home)
