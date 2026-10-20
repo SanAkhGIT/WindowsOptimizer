@@ -52,10 +52,39 @@ manifest.write_text(content.replace('android:label="Home"', 'android:label="FIZX
 settings = root / "src" / "com" / "ansub" / "tvhome" / "MainActivity.java"
 settings_content = settings.read_text(encoding="utf-8")
 old_settings = 'private static final String[] SETTINGS_ITEMS = {"Wallpaper", "TV settings"};'
-new_settings = 'private static final String[] SETTINGS_ITEMS = {"TV settings"};'
+new_settings = 'private static final String[] SETTINGS_ITEMS = {"TV settings", "Wi-Fi", "Bluetooth", "Sound", "Picture"};'
 if settings_content.count(old_settings) != 1:
     raise SystemExit("Could not safely locate the upstream Settings menu; refusing an ambiguous patch.")
 settings.write_text(settings_content.replace(old_settings, new_settings, 1), encoding="utf-8")
+
+# Keep the home-screen gear menu useful on FIZXIX's pure-black skin: direct TV settings
+# plus connectivity, Bluetooth, sound and display shortcuts. Do not restore wallpaper choices.
+activity_content = settings.read_text(encoding="utf-8")
+old_open = '''            dropdown(tile(SETTINGS), SETTINGS_ITEMS, which -> {
+                if (which == 0) showWallpapers();
+                else try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception ignored) {}
+            });'''
+new_open = '''            dropdown(tile(SETTINGS), SETTINGS_ITEMS, which -> {
+                String action;
+                switch (which) {
+                    case 0: action = Settings.ACTION_SETTINGS; break;
+                    case 1: action = Settings.ACTION_WIFI_SETTINGS; break;
+                    case 2: action = Settings.ACTION_BLUETOOTH_SETTINGS; break;
+                    case 3: action = Settings.ACTION_SOUND_SETTINGS; break;
+                    case 4: action = Settings.ACTION_DISPLAY_SETTINGS; break;
+                    default: return;
+                }
+                try { startActivity(new Intent(action).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
+                catch (Exception ignored) {
+                    if (which != 0) try {
+                        startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                    } catch (Exception ignoredAgain) {}
+                }
+            });'''
+if activity_content.count(old_open) != 1:
+    raise SystemExit("Could not safely locate the Settings gear action; refusing an ambiguous patch.")
+settings.write_text(activity_content.replace(old_open, new_open, 1), encoding="utf-8")
 
 activity = root / "src" / "com" / "ansub" / "tvhome" / "MainActivity.java"
 content = activity.read_text(encoding="utf-8")
