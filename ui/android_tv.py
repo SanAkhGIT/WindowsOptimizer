@@ -4,7 +4,7 @@ from pathlib import Path
 
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
-    QAbstractItemView, QCheckBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
+    QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
     QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
     QWidget,
@@ -294,7 +294,27 @@ class AndroidTvPanel(QWidget):
         actions.addWidget(settings)
         layout.addLayout(actions)
 
-        custom = QGroupBox("tv-detox app tiles and shortcuts")
+        fizxix_group = QGroupBox("FIZXIX Home — black background + watermark")
+        fizxix_layout = QVBoxLayout(fizxix_group)
+        fizxix_note = QLabel(
+            "Build the FIZXIX-TV-Detox artifact from the WindowsOptimizer GitHub Actions workflow, "
+            "extract FIZXIX-TV-Detox.apk, then select it below. It installs as a separate launcher; "
+            "the official TV Detox app and Google TV Home are not uninstalled."
+        )
+        fizxix_note.setObjectName("muted")
+        fizxix_note.setWordWrap(True)
+        fizxix_layout.addWidget(fizxix_note)
+        fizxix_row = QHBoxLayout()
+        install_fizxix = QPushButton("Install FIZXIX Home APK…")
+        install_fizxix.clicked.connect(self.install_fizxix_home)
+        set_fizxix = QPushButton("Set FIZXIX Home as Home")
+        set_fizxix.clicked.connect(self.set_fizxix_home)
+        fizxix_row.addWidget(install_fizxix)
+        fizxix_row.addWidget(set_fizxix)
+        fizxix_layout.addLayout(fizxix_row)
+        layout.addWidget(fizxix_group)
+
+        custom = QGroupBox("Launcher app tiles and shortcuts")
         custom_layout = QVBoxLayout(custom)
         explain = QLabel(
             "Load the current layout first. If the official release APK blocks preference readback, you can still "
@@ -304,6 +324,15 @@ class AndroidTvPanel(QWidget):
         explain.setObjectName("muted")
         explain.setWordWrap(True)
         custom_layout.addWidget(explain)
+
+        target_row = QHBoxLayout()
+        target_row.addWidget(QLabel("Launcher layout to edit:"))
+        self.launcher_target = QComboBox()
+        self.launcher_target.addItem("Official TV Detox", tv.TV_DETOX_PACKAGE)
+        self.launcher_target.addItem("FIZXIX Home (black + watermark)", tv.FIZXIX_HOME_PACKAGE)
+        self.launcher_target.currentIndexChanged.connect(self._launcher_target_changed)
+        target_row.addWidget(self.launcher_target, 1)
+        custom_layout.addLayout(target_row)
 
         self.manual_backup_toggle = QCheckBox(
             "Use a verified manual snapshot if tv-detox does not expose its saved preferences"
@@ -520,6 +549,57 @@ class AndroidTvPanel(QWidget):
         ) == QMessageBox.StandardButton.Yes:
             self._async("Install / update tv-detox", tv.install_or_update_tv_detox)
 
+    def install_fizxix_home(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Select FIZXIX-TV-Detox.apk",
+            "",
+            "FIZXIX TV Detox APK (FIZXIX-TV-Detox.apk)",
+        )
+        if not path:
+            return
+        if Path(path).name != "FIZXIX-TV-Detox.apk":
+            QMessageBox.warning(
+                self,
+                "Unexpected APK filename",
+                "Select the FIZXIX-TV-Detox.apk file from the WindowsOptimizer GitHub Actions artifact.",
+            )
+            return
+        try:
+            params = self._params()
+        except Exception as exc:
+            QMessageBox.warning(self, "Connection details", str(exc))
+            return
+        answer = QMessageBox.question(
+            self,
+            "Install FIZXIX Home",
+            "Install the selected APK as a separate launcher (com.fizxix.tvhome)?\\n\\n"
+            "Only select the FIZXIX-TV-Detox.apk built by this repository. "
+            "This does not uninstall official TV Detox or disable Google TV Home. "
+            "The launcher will not become default until you choose Set FIZXIX Home as Home.\\n\\n"
+            "If updating a previous FIZXIX build reports UPDATE_INCOMPATIBLE, stop; "
+            "the signing key differs and no app will be uninstalled automatically.",
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        self.connection_status.setText("Working: install FIZXIX Home…")
+        self.run_job(
+            lambda: tv.install_fizxix_home(path, **params),
+            done=lambda value: self._show_result("Install FIZXIX Home", value),
+            fail=lambda error: self._show_error("Install FIZXIX Home", error),
+            label="Install FIZXIX Home",
+        )
+
+    def set_fizxix_home(self):
+        if QMessageBox.question(
+            self,
+            "Set FIZXIX Home as Home",
+            "Make com.fizxix.tvhome/.MainActivity the default launcher?\\n\\n"
+            "The current Home is recorded for Undo. Google TV Home and official TV Detox stay installed. "
+            "If switching fails, the previous Home is restored when possible.",
+        ) == QMessageBox.StandardButton.Yes:
+            self._async("Set FIZXIX Home as Home", tv.set_fizxix_home)
+
     def set_tvdetox_home(self):
         try:
             params = self._params()
@@ -551,37 +631,69 @@ class AndroidTvPanel(QWidget):
     def _manual_current_auto_changed(self, checked):
         self.manual_current_apps.setEnabled(not checked)
 
+    def _selected_launcher_package(self):
+        return self.launcher_target.currentData() or tv.TV_DETOX_PACKAGE
+
+    def _selected_launcher_label(self):
+        return "FIZXIX Home" if self._selected_launcher_package() == tv.FIZXIX_HOME_PACKAGE else "TV Detox"
+
+    def _launcher_target_changed(self, *_args):
+        self._layout_loaded = False
+        self._layout_readable = False
+        if hasattr(self, "apply_layout_button"):
+            self.apply_layout_button.setEnabled(False)
+        if hasattr(self, "connection_status"):
+            self.connection_status.setText("Launcher selection changed; load its current layout before editing.")
+
     def load_tv_layout(self):
         try:
             params = self._params()
         except Exception as exc:
             QMessageBox.warning(self, "Connection details", str(exc))
             return
-        self.connection_status.setText("Working: read tv-detox layout…")
+        launcher_package = self._selected_launcher_package()
+        launcher_label = self._selected_launcher_label()
+        self.connection_status.setText(f"Working: read {launcher_label} layout…")
         def task():
             packages = tv.tv_launchable_apps(**params)
             try:
-                prefs = tv.tv_detox_layout(**params)
-                return {"preferences": prefs, "packages": packages, "layout_error": None}
+                prefs = tv.tv_detox_layout(**params, launcher_package=launcher_package)
+                return {
+                    "preferences": prefs,
+                    "packages": packages,
+                    "layout_error": None,
+                    "launcher_package": launcher_package,
+                }
             except RuntimeError as exc:
                 message = str(exc)
                 if (
                     "Exact tv-detox layout backup is unavailable" in message
                     or "Could not parse tv-detox's saved layout" in message
                 ):
-                    return {"preferences": None, "packages": packages, "layout_error": message}
+                    return {
+                        "preferences": None,
+                        "packages": packages,
+                        "layout_error": message,
+                        "launcher_package": launcher_package,
+                    }
                 raise
         self.run_job(
             task,
             done=self._populate_tv_layout,
-            fail=lambda error: self._show_error("Read tv-detox layout", error),
-            label="Read tv-detox layout",
+            fail=lambda error: self._show_error(f"Read {launcher_label} layout", error),
+            label=f"Read {launcher_label} layout",
         )
 
     def _populate_tv_layout(self, result):
         prefs = result["preferences"]
         packages = result["packages"]
         layout_error = result.get("layout_error")
+        self._layout_launcher_package = result.get("launcher_package", tv.TV_DETOX_PACKAGE)
+        if self._layout_launcher_package != self._selected_launcher_package():
+            self._layout_loaded = False
+            self.apply_layout_button.setEnabled(False)
+            self.connection_status.setText("Launcher selection changed during the read; load the selected layout again.")
+            return
         self._layout_readable = prefs is not None
 
         saved_apps = prefs.get("apps") if prefs else None
@@ -626,7 +738,7 @@ class AndroidTvPanel(QWidget):
             self.connection_status.setText(
                 f"Loaded {len(packages)} launchable app package(s); previous layout is readable and will be backed up automatically."
             )
-            report = "CURRENT TV-DETOX LAYOUT\n" + json.dumps(prefs, indent=2)
+            report = f"CURRENT {self._selected_launcher_label().upper()} LAYOUT\n" + json.dumps(prefs, indent=2)
         else:
             # Some official release builds are not debuggable, so Android's run-as
             # cannot read private SharedPreferences. Offer a manual, user-attested
@@ -682,7 +794,11 @@ class AndroidTvPanel(QWidget):
 
     def apply_tv_layout(self):
         if not self._layout_loaded:
-            QMessageBox.information(self, "Load first", "Load the current tv-detox layout first so the current state can be backed up.")
+            QMessageBox.information(self, "Load first", "Load the selected launcher's current layout first so the current state can be backed up.")
+            return
+        launcher_package = self._selected_launcher_package()
+        if getattr(self, "_layout_launcher_package", None) != launcher_package:
+            QMessageBox.information(self, "Reload layout", "The selected launcher differs from the loaded snapshot. Load its current layout again.")
             return
         manual_before = None
         if not self._layout_readable:
@@ -760,7 +876,11 @@ class AndroidTvPanel(QWidget):
         self.connection_status.setText("Working: apply tv-detox UI layout…")
         self.run_job(
             lambda: tv.configure_tv_detox(
-                apps=apps, quick_shortcuts=quick, manual_before=manual_before, **params
+                apps=apps,
+                quick_shortcuts=quick,
+                manual_before=manual_before,
+                launcher_package=launcher_package,
+                **params,
             ),
             done=lambda value: self._layout_apply_done(value),
             fail=lambda error: self._layout_apply_failed(error),
