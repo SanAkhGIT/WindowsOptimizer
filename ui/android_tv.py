@@ -573,10 +573,10 @@ class AndroidTvPanel(QWidget):
         answer = QMessageBox.question(
             self,
             "Install FIZXIX Home",
-            "Install the selected APK as a separate launcher (com.fizxix.tvhome)?\\n\\n"
+            "Install the selected APK as a separate launcher (com.fizxix.tvhome)?\n\n"
             "Only select the FIZXIX-TV-Detox.apk built by this repository. "
             "This does not uninstall official TV Detox or disable Google TV Home. "
-            "The launcher will not become default until you choose Set FIZXIX Home as Home.\\n\\n"
+            "The launcher will not become default until you choose Set FIZXIX Home as Home.\n\n"
             "If updating a previous FIZXIX build reports UPDATE_INCOMPATIBLE, stop; "
             "the signing key differs and no app will be uninstalled automatically.",
         )
@@ -594,7 +594,7 @@ class AndroidTvPanel(QWidget):
         if QMessageBox.question(
             self,
             "Set FIZXIX Home as Home",
-            "Make com.fizxix.tvhome/.MainActivity the default launcher?\\n\\n"
+            "Make com.fizxix.tvhome/.MainActivity the default launcher?\n\n"
             "The current Home is recorded for Undo. Google TV Home and official TV Detox stay installed. "
             "If switching fails, the previous Home is restored when possible.",
         ) == QMessageBox.StandardButton.Yes:
