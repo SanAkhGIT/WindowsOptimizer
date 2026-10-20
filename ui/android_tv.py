@@ -587,12 +587,18 @@ class AndroidTvPanel(QWidget):
         saved_apps = prefs.get("apps") if prefs else None
         saved_quick = (prefs.get("quick") or "").replace(" ", "").split(",") if prefs and prefs.get("quick") else []
         if saved_apps:
-            saved_app_set = {value.strip() for value in saved_apps.split(",") if value.strip()}
+            saved_app_order = [value.strip() for value in saved_apps.split(",") if value.strip()]
+            saved_app_set = set(saved_app_order)
+            # Keep the current custom tile order on load. Sorting the selected set
+            # alphabetically would silently change the user's launcher layout on Apply.
+            ordered_packages = saved_app_order + sorted(set(packages) - saved_app_set, key=str.casefold)
         else:
+            saved_app_order = []
             saved_app_set = set()
+            ordered_packages = sorted(set(packages), key=str.casefold)
 
         self.apps_list.clear()
-        for package in sorted(set(packages) | saved_app_set, key=str.casefold):
+        for package in ordered_packages:
             item = QListWidgetItem(package)
             item.setData(Qt.ItemDataRole.UserRole, package)
             item.setFlags(item.flags() | Qt.ItemFlag.ItemIsUserCheckable)
