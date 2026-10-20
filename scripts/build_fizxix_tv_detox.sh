@@ -129,15 +129,23 @@ activity.write_text(content, encoding="utf-8")
 # Route the remote Settings/Menu key to the main TV Settings screen, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
 method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
-settings_method = """    // Some Android TV remotes report the Settings key as HID usage 0x000c009f,
-    // which this device currently exposes as KEYCODE_UNKNOWN. Intercept it before
-    // focused child views can consume it, while keeping the standard mappings too.
-    private static final int FIZXIX_REMOTE_SETTINGS_HID_USAGE = 0x000c009f;
+settings_method = """    // Linux reports this remote's gear key as KEY_UNKNOWN (Linux key code 240).
+    // Android apps do not receive the raw MSC_SCAN HID usage, so scope the fallback
+    // to the specific consumer-control device instead of matching every unknown key.
+    private static final int LINUX_KEY_UNKNOWN = 240;
+    private static final String FIZXIX_REMOTE_DEVICE = "RemoteG10 Consumer Control";
 
     private boolean isFizxixSettingsKey(KeyEvent event) {
-        return event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
-                || event.getKeyCode() == KeyEvent.KEYCODE_MENU
-                || event.getScanCode() == FIZXIX_REMOTE_SETTINGS_HID_USAGE;
+        if (event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
+                || event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
+            return true;
+        }
+        if (event.getKeyCode() != KeyEvent.KEYCODE_UNKNOWN
+                || event.getScanCode() != LINUX_KEY_UNKNOWN) {
+            return false;
+        }
+        android.view.InputDevice device = android.view.InputDevice.getDevice(event.getDeviceId());
+        return device != null && FIZXIX_REMOTE_DEVICE.equals(device.getName());
     }
 
     private void openFizxixTvSettings() {
@@ -171,8 +179,11 @@ settings_method = """    // Some Android TV remotes report the Settings key as H
         }
         if (event.getAction() == KeyEvent.ACTION_DOWN
                 && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
-            android.util.Log.d("FIZXIX-Remote", "Observed unknown key: scanCode=0x"
-                    + Integer.toHexString(event.getScanCode()) + ", deviceId=" + event.getDeviceId());
+            android.view.InputDevice device = android.view.InputDevice.getDevice(event.getDeviceId());
+            android.util.Log.d("FIZXIX-Remote", "Observed unknown key: scanCode="
+                    + event.getScanCode() + ", device="
+                    + (device == null ? "<unknown>" : device.getName())
+                    + ", deviceId=" + event.getDeviceId());
         }
         return super.dispatchKeyEvent(event);
     }
