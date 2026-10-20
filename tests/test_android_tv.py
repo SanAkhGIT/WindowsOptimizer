@@ -214,3 +214,49 @@ def test_half_speed_animation_settings_are_verified_and_reversible(monkeypatch):
     assert set(recorded["before"].values()) == {"1"}
     assert set(recorded["after"].values()) == {"0.5"}
     assert "saved for Undo" in result
+
+
+
+@pytest.mark.parametrize(
+    ("operation", "expected_key", "expected_value", "description_fragment"),
+    [
+        (lambda: tv.set_screensaver_enabled(True, "192.168.1.10", 5555, "adb.exe"),
+         "secure.screensaver_enabled", "1", "Enable Android screensaver"),
+        (lambda: tv.set_screensaver_enabled(False, "192.168.1.10", 5555, "adb.exe"),
+         "secure.screensaver_enabled", "0", "Disable Android screensaver"),
+        (lambda: tv.set_keep_screen_awake(True, "192.168.1.10", 5555, "adb.exe"),
+         "global.stay_on_while_plugged_in", "3", "Keep screen awake"),
+        (lambda: tv.set_keep_screen_awake(False, "192.168.1.10", 5555, "adb.exe"),
+         "global.stay_on_while_plugged_in", "0", "Restore screen sleep"),
+    ],
+)
+def test_display_options_preserve_prior_values_for_undo(
+    monkeypatch, operation, expected_key, expected_value, description_fragment
+):
+    calls = []
+    recorded = {}
+    monkeypatch.setattr(tv, "connect", lambda *a, **k: {
+        "serial": "192.168.1.10:5555", "adb_path": "adb.exe"
+    })
+    monkeypatch.setattr(tv, "_read_setting", lambda adb, serial, namespace, key: "previous-value")
+
+    def fake_put(adb, serial, namespace, key, value):
+        calls.append((namespace, key, value))
+
+    def fake_record(serial, kind, description, before, after):
+        recorded.update({
+            "kind": kind, "description": description, "before": before, "after": after
+        })
+
+    monkeypatch.setattr(tv, "_put_setting", fake_put)
+    monkeypatch.setattr(tv, "_record_change", fake_record)
+    operation()
+
+    assert len(calls) == 1
+    namespace, key, value = calls[0]
+    assert f"{namespace}.{key}" == expected_key
+    assert value == expected_value
+    assert recorded["kind"] == "settings_batch"
+    assert recorded["before"][expected_key] == "previous-value"
+    assert recorded["after"][expected_key] == expected_value
+    assert description_fragment in recorded["description"]
