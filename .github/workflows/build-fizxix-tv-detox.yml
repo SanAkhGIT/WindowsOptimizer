@@ -56,6 +56,16 @@ jobs:
           TV_DETOX_REF: ${{ github.event.inputs.upstream_ref || 'HEAD' }}
         run: bash scripts/build_fizxix_tv_detox.sh
 
+      - name: Validate launcher APK and upstream provenance
+        run: |
+          APK="dist/FIZXIX-TV-Detox.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.fizxix.tvhome'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$APK"
+          test -s "dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt"
+          grep -F "Upstream commit:" "dist/FIZXIX-TV-Detox-NOTICE.txt"
+
       # The emulator runner can fail to boot on hosted CI even when the APK
       # built correctly. Keep the smoke check visible, but do not block publishing.
       - name: Smoke test on Android TV emulator
