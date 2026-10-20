@@ -394,7 +394,7 @@ def health_check(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | 
     mem_kb = parse_meminfo(raw_mem)
     _, enabled, disabled = _package_sets(adb, serial)
     launcher_state = {}
-    for package in (TV_DETOX_PACKAGE, *GOOGLE_TV_LAUNCHERS, *SETUP_PACKAGES):
+    for package in (TV_DETOX_PACKAGE, FIZXIX_HOME_PACKAGE, *GOOGLE_TV_LAUNCHERS, *SETUP_PACKAGES):
         launcher_state[package] = (
             "disabled" if package in disabled else
             "enabled" if package in enabled else "not installed or unknown"
