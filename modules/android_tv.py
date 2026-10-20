@@ -482,6 +482,16 @@ def tv_launchable_apps(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: 
     return sorted(packages, key=str.casefold)
 
 
+def tv_detox_layout(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> dict:
+    """Return the exact saved app/shortcut preferences or fail closed if unreadable."""
+    connection = connect(tv_ip, port, adb_path)
+    serial, adb = connection["serial"], connection["adb_path"]
+    _, enabled, _ = _package_sets(adb, serial)
+    if TV_DETOX_PACKAGE not in enabled:
+        raise RuntimeError("tv-detox is not installed and enabled on this device.")
+    return _read_tvhome_preferences(adb, serial)
+
+
 def _set_tvhome_preferences(adb: str, serial: str, preferences: dict) -> None:
     apps = preferences.get("apps") or "auto"
     quick = preferences.get("quick") or "none"
@@ -508,21 +518,22 @@ def configure_tv_detox(
     quick = list(dict.fromkeys((quick_shortcuts or [])))
     if any(item not in allowed_quick for item in quick):
         raise ValueError("Allowed tv-detox shortcuts are bluetooth, sound, and picture.")
-    selected_apps = list(dict.fromkeys(apps or []))
-    if len(selected_apps) > 48:
+    selected_apps = None if apps is None else list(dict.fromkeys(apps))
+    if selected_apps is not None and len(selected_apps) > 48:
         raise ValueError("Select no more than 48 TV apps.")
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
     _, enabled, _ = _package_sets(adb, serial)
     if TV_DETOX_PACKAGE not in enabled:
         raise RuntimeError("tv-detox is not confirmed enabled. Install or enable it before changing its layout.")
-    launchable = set(tv_launchable_apps(tv_ip, port, adb))
-    invalid = sorted(set(selected_apps) - launchable)
-    if invalid:
-        raise ValueError(f"These packages are not launchable TV apps on this device: {', '.join(invalid)}")
     before = _read_tvhome_preferences(adb, serial)
-    apps_value = ",".join(selected_apps) if selected_apps else "auto"
-    quick_value = ",".join(quick) if quick else "none"
+    if selected_apps is not None:
+        launchable = set(tv_launchable_apps(tv_ip, port, adb))
+        invalid = sorted(set(selected_apps) - launchable)
+        if invalid:
+            raise ValueError(f"These packages are not launchable TV apps on this device: {', '.join(invalid)}")
+    apps_value = (before.get("apps") or "auto") if selected_apps is None else (",".join(selected_apps) if selected_apps else "auto")
+    quick_value = (before.get("quick") or "none") if quick_shortcuts is None else (",".join(quick) if quick else "none")
     stamp = uuid.uuid4().hex
     output = _shell(
         adb, serial, "am", "start", "-n", TV_DETOX_COMPONENT,
@@ -533,9 +544,14 @@ def configure_tv_detox(
     )
     if "error:" in output.lower() or "exception" in output.lower():
         raise RuntimeError(f"tv-detox did not accept the layout update: {output}")
+    after = dict(before)
+    if selected_apps is not None:
+        after["apps"] = selected_apps or None
+    if quick_shortcuts is not None:
+        after["quick"] = quick or None
     _record_change(
         serial, "tvhome_config", "Customize tv-detox app tiles and shortcuts",
-        before, {"apps": selected_apps or None, "quick": quick or None},
+        before, after,
     )
     return "tv-detox layout updated. Previous app/shortcut preferences were backed up for exact Undo."
 
