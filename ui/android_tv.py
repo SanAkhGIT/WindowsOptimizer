@@ -509,6 +509,10 @@ class AndroidTvPanel(QWidget):
         currently_enabled = candidate.get("state") == "enabled"
         if desired_enabled == currently_enabled:
             return
+        # Keep the displayed state authoritative until the confirmed ADB action succeeds.
+        self.candidate_table.blockSignals(True)
+        item.setCheckState(Qt.CheckState.Checked if currently_enabled else Qt.CheckState.Unchecked)
+        self.candidate_table.blockSignals(False)
         self.candidate_table.setCurrentCell(row, 3)
         self.change_selected_package(restore=desired_enabled)
 
