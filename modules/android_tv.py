@@ -494,22 +494,55 @@ def set_animation_scales_half(tv_ip: str = "192.168.0.21", port: int = 5555, adb
     return "Animation scales set to 0.5x and verified. Exact previous values are saved for Undo."
 
 
-def disable_screensaver(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
+def set_screensaver_enabled(enabled: bool, tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
+    """Set the secure screensaver flag and preserve the exact prior value for Undo."""
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be a boolean.")
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
-    before = {"secure.screensaver_enabled": _read_setting(adb, serial, "secure", "screensaver_enabled")}
+    key = "secure.screensaver_enabled"
+    before = {key: _read_setting(adb, serial, "secure", "screensaver_enabled")}
+    value = "1" if enabled else "0"
     try:
-        _put_setting(adb, serial, "secure", "screensaver_enabled", "0")
+        _put_setting(adb, serial, "secure", "screensaver_enabled", value)
     except Exception as exc:
         try:
-            _put_setting(adb, serial, "secure", "screensaver_enabled", before["secure.screensaver_enabled"])
+            _put_setting(adb, serial, "secure", "screensaver_enabled", before[key])
         except Exception as rollback_exc:
             raise RuntimeError(
                 f"Setting screensaver_enabled failed ({exc}) and restoring the previous value also failed ({rollback_exc})."
             ) from exc
         raise
-    _record_change(serial, "settings_batch", "Disable Android screensaver setting", before, {"secure.screensaver_enabled": "0"})
-    return "Android screensaver setting disabled and verified. Exact previous value is saved for Undo."
+    action = "Enable" if enabled else "Disable"
+    _record_change(serial, "settings_batch", f"{action} Android screensaver setting", before, {key: value})
+    return f"Android screensaver setting {'enabled' if enabled else 'disabled'} and verified. Exact previous value is saved for Undo."
+
+
+def disable_screensaver(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
+    """Compatibility wrapper for the explicit disable action."""
+    return set_screensaver_enabled(False, tv_ip, port, adb_path)
+
+
+def set_keep_screen_awake(enabled: bool, tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str | None = None) -> str:
+    """Control Android's stay-awake-while-plugged-in setting with an exact undo value."""
+    if not isinstance(enabled, bool):
+        raise ValueError("enabled must be a boolean.")
+    connection = connect(tv_ip, port, adb_path)
+    serial, adb = connection["serial"], connection["adb_path"]
+    key = "global.stay_on_while_plugged_in"
+    before = {key: _read_setting(adb, serial, "global", "stay_on_while_plugged_in")}
+    value = "3" if enabled else "0"
+    _put_setting(adb, serial, "global", "stay_on_while_plugged_in", value)
+    _record_change(
+        serial, "settings_batch",
+        "Keep screen awake while plugged in" if enabled else "Restore screen sleep while plugged in",
+        before, {key: value},
+    )
+    return (
+        "Keep-awake enabled while plugged in (AC/USB flags). Exact previous value is saved for Undo."
+        if enabled else
+        "Keep-awake disabled; Android's normal plugged-in screen sleep behavior is restored. Exact previous value is saved for Undo."
+    )
 
 
 def _parse_tvhome_preferences(xml_text: str) -> dict:
