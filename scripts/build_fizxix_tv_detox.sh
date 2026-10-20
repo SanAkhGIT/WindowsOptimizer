@@ -129,10 +129,9 @@ activity.write_text(content, encoding="utf-8")
 # Route the remote Settings/Menu key to the main TV Settings screen, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
 method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
-settings_method = """    // Linux reports this remote's gear key as KEY_UNKNOWN (Linux key code 240).
-    // Android apps do not receive the raw MSC_SCAN HID usage, so scope the fallback
-    // to the specific consumer-control device instead of matching every unknown key.
-    private static final int LINUX_KEY_UNKNOWN = 240;
+settings_method = """    // v1.5.3 logs from the physical gear press: KEYCODE_NOTIFICATION, scanCode=240.
+    // Keep matching scoped to this exact consumer-control device and observed scan code.
+    private static final int REMOTE_GEAR_SCAN_CODE = 240;
     private static final String FIZXIX_REMOTE_DEVICE = "RemoteG10 Consumer Control";
 
     private boolean isFizxixSettingsKey(KeyEvent event) {
@@ -140,8 +139,9 @@ settings_method = """    // Linux reports this remote's gear key as KEY_UNKNOWN 
                 || event.getKeyCode() == KeyEvent.KEYCODE_MENU) {
             return true;
         }
-        if (event.getKeyCode() != KeyEvent.KEYCODE_UNKNOWN
-                || event.getScanCode() != LINUX_KEY_UNKNOWN) {
+        if (event.getScanCode() != REMOTE_GEAR_SCAN_CODE
+                || (event.getKeyCode() != KeyEvent.KEYCODE_UNKNOWN
+                    && event.getKeyCode() != KeyEvent.KEYCODE_NOTIFICATION)) {
             return false;
         }
         android.view.InputDevice device = android.view.InputDevice.getDevice(event.getDeviceId());
@@ -212,7 +212,7 @@ version_match = 'android:versionCode="14" android:versionName="1.5.1"'
 if manifest_content.count(version_match) != 1:
     raise SystemExit("Could not safely bump the expected upstream app version.")
 manifest_content = manifest_content.replace(version_match,
-    'android:versionCode="16" android:versionName="1.5.3"', 1)
+    'android:versionCode="17" android:versionName="1.5.4"', 1)
 service_manifest = """        <service
             android:name=".RemoteKeyAccessibilityService"
             android:label="FIZXIX Remote Key Handler"
@@ -259,8 +259,9 @@ import android.view.accessibility.AccessibilityEvent;
 public final class RemoteKeyAccessibilityService extends AccessibilityService {
     private static final String TAG = "FIZXIX-Remote";
     private static final String REMOTE_DEVICE = "RemoteG10 Consumer Control";
-    // KeyEvent.getScanCode() is the Linux key code, not the separate MSC_SCAN HID usage.
-    private static final int LINUX_KEY_UNKNOWN = 240;
+    // Confirmed by v1.5.3 logs while pressing the physical gear button:
+    // keyCode=KEYCODE_NOTIFICATION (83), scanCode=240, RemoteG10 Consumer Control.
+    private static final int REMOTE_GEAR_SCAN_CODE = 240;
 
     @Override
     protected void onServiceConnected() {
@@ -311,12 +312,14 @@ public final class RemoteKeyAccessibilityService extends AccessibilityService {
         boolean remoteDevice = device != null && REMOTE_DEVICE.equals(device.getName());
         boolean standardSettingsKey = event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
                 || event.getKeyCode() == KeyEvent.KEYCODE_MENU;
-        boolean unknownRemoteKey = remoteDevice
-                && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN;
+        // Match the observed gear event only on this remote, with the logged scan code.
+        // KEYCODE_NOTIFICATION alone is too broad and must not trigger for other devices.
+        boolean remoteGearKey = remoteDevice
+                && event.getScanCode() == REMOTE_GEAR_SCAN_CODE
+                && (event.getKeyCode() == KeyEvent.KEYCODE_NOTIFICATION
+                    || event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN);
 
-        // The scanCode == 240 assumption was never verified on this TV, so match any
-        // KEYCODE_UNKNOWN from the named remote and rely on the log above for the real value.
-        boolean gearKey = standardSettingsKey || unknownRemoteKey;
+        boolean gearKey = standardSettingsKey || remoteGearKey;
         if (!gearKey) {
             return false;
         }
