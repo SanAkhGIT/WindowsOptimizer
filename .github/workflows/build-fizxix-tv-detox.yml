@@ -2,6 +2,14 @@ name: Build FIZXIX TV Detox
 
 on:
   workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "TV Detox branch, tag, or commit SHA (HEAD uses the current default branch)"
+        required: false
+        default: "HEAD"
+        type: string
+  schedule:
+    - cron: "23 6 * * 1"
   push:
     branches: [main, "feature/**"]
     paths:
@@ -42,8 +50,10 @@ jobs:
             echo "::warning::No persistent FIZXIX signing key configured. This build will work for first installation, but a future build signed with a different key cannot update it in place."
           fi
 
-      - name: Build black FIZXIX launcher
+      - name: Build black FIZXIX launcher from selected upstream revision
         id: build_fizxix
+        env:
+          TV_DETOX_REF: ${{ github.event.inputs.upstream_ref || 'HEAD' }}
         run: bash scripts/build_fizxix_tv_detox.sh
 
       # The emulator runner can fail to boot on hosted CI even when the APK
