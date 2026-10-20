@@ -227,10 +227,13 @@ class AndroidTvPanel(QWidget):
         anim_row = QHBoxLayout()
         anim_label = QLabel("Set the three Android animation scales to 0 for a snappier interface.")
         anim_label.setWordWrap(True)
-        anim_button = QPushButton("Disable animations")
+        anim_button = QPushButton("Disable animations (0x)")
         anim_button.setObjectName("primary")
         anim_button.clicked.connect(self.disable_animations)
+        half_button = QPushButton("Faster animations (0.5x)")
+        half_button.clicked.connect(self.half_animations)
         anim_row.addWidget(anim_label, 1)
+        anim_row.addWidget(half_button)
         anim_row.addWidget(anim_button)
         ui_layout.addLayout(anim_row)
 
@@ -506,6 +509,13 @@ class AndroidTvPanel(QWidget):
     def _package_change_done(self, label, value):
         self._show_result(label, value)
         self.refresh_candidates()
+
+    def half_animations(self):
+        if QMessageBox.question(
+            self, "Set Android animations to 0.5x",
+            "Set window, transition, and animator scales to 0.5x? This keeps short transitions while making the interface feel faster. The exact previous values will be saved for Undo.",
+        ) == QMessageBox.StandardButton.Yes:
+            self._async("Set Android animations to 0.5x", tv.set_animation_scales_half)
 
     def disable_animations(self):
         if QMessageBox.question(
