@@ -129,22 +129,52 @@ activity.write_text(content, encoding="utf-8")
 # Route the remote Settings/Menu key to the main TV Settings screen, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
 method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
-settings_method = """    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if (keyCode == KeyEvent.KEYCODE_SETTINGS || keyCode == KeyEvent.KEYCODE_MENU) {
+settings_method = """    // Some Android TV remotes report the Settings key as HID usage 0x000c009f,
+    // which this device currently exposes as KEYCODE_UNKNOWN. Intercept it before
+    // focused child views can consume it, while keeping the standard mappings too.
+    private static final int FIZXIX_REMOTE_SETTINGS_HID_USAGE = 0x000c009f;
+
+    private boolean isFizxixSettingsKey(KeyEvent event) {
+        return event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
+                || event.getKeyCode() == KeyEvent.KEYCODE_MENU
+                || event.getScanCode() == FIZXIX_REMOTE_SETTINGS_HID_USAGE;
+    }
+
+    private void openFizxixTvSettings() {
+        try {
+            startActivity(new Intent()
+                    .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            android.util.Log.i("FIZXIX-Remote", "Opened main TV Settings from remote key.");
+        } catch (Exception explicitFailure) {
+            android.util.Log.w("FIZXIX-Remote", "Explicit TV Settings launch failed; trying ACTION_SETTINGS.",
+                    explicitFailure);
             try {
-                startActivity(new Intent()
-                        .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
+                startActivity(new Intent(Settings.ACTION_SETTINGS)
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            } catch (Exception ignored) {
-                try {
-                    startActivity(new Intent(Settings.ACTION_SETTINGS)
-                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-                } catch (Exception ignoredAgain) {}
+            } catch (Exception fallbackFailure) {
+                android.util.Log.e("FIZXIX-Remote", "Could not open TV Settings.", fallbackFailure);
+            }
+        }
+    }
+
+    @Override
+    public boolean dispatchKeyEvent(KeyEvent event) {
+        if (isFizxixSettingsKey(event)) {
+            if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+                android.util.Log.i("FIZXIX-Remote", "Matched remote Settings key: keyCode="
+                        + event.getKeyCode() + ", scanCode=0x"
+                        + Integer.toHexString(event.getScanCode()) + ", deviceId=" + event.getDeviceId());
+                openFizxixTvSettings();
             }
             return true;
         }
-        return super.onKeyDown(keyCode, event);
+        if (event.getAction() == KeyEvent.ACTION_DOWN
+                && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN) {
+            android.util.Log.d("FIZXIX-Remote", "Observed unknown key: scanCode=0x"
+                    + Integer.toHexString(event.getScanCode()) + ", deviceId=" + event.getDeviceId());
+        }
+        return super.dispatchKeyEvent(event);
     }
 
 """
