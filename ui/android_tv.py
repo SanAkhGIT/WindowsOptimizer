@@ -133,6 +133,29 @@ class AndroidTvPanel(QWidget):
             rendered = str(result)
         self.output.setPlainText(rendered)
         self._show_detail(rendered)
+        if isinstance(result, dict) and "connection" in result and "device" in result:
+            self._update_health_cards(result)
+
+    def _update_health_cards(self, report):
+        connection = report.get("connection") or {}
+        device = report.get("device") or {}
+        memory = report.get("memory_mib") or {}
+        home = report.get("home") or {}
+        changes = report.get("recent_changes") or []
+        pending = sum(1 for item in changes if item.get("status") == "pending")
+        total = memory.get("MemTotal")
+        available = memory.get("MemAvailable")
+        self.health_values["connection"].setText(str(connection.get("state") or "Unknown").title())
+        self.health_values["device"].setText(
+            " ".join(str(device.get(key) or "").strip() for key in ("manufacturer", "model")).strip() or "Unknown"
+        )
+        self.health_values["android"].setText(str(device.get("android_version") or "Unknown"))
+        if isinstance(available, (int, float)) and isinstance(total, (int, float)):
+            self.health_values["memory"].setText(f"{available:g} / {total:g} MiB available")
+        else:
+            self.health_values["memory"].setText("Unavailable")
+        self.health_values["home"].setText(str(home.get("component") or home.get("raw") or "Unknown"))
+        self.health_values["changes"].setText(str(pending))
 
     def _show_error(self, label, error):
         message = str(error)
