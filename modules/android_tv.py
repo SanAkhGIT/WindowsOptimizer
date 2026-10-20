@@ -599,7 +599,7 @@ def _set_tvhome_preferences(adb: str, serial: str, preferences: dict) -> None:
         check=False,
     )
     if "error:" in output.lower() or "exception" in output.lower():
-        raise RuntimeError(f"tv-detox could not apply its saved configuration: {output}")
+        raise RuntimeError(f"{launcher_package} could not apply its saved configuration: {output}")
 
 
 def configure_tv_detox(
@@ -650,19 +650,19 @@ def configure_tv_detox(
         check=False,
     )
     if "error:" in output.lower() or "exception" in output.lower():
-        raise RuntimeError(f"tv-detox did not accept the layout update: {output}")
+        raise RuntimeError(f"{launcher_package} did not accept the layout update: {output}")
     after = dict(before)
     if selected_apps is not None:
         after["apps"] = selected_apps or None
     if quick_shortcuts is not None:
         after["quick"] = quick or None
     _record_change(
-        serial, "tvhome_config", "Customize tv-detox app tiles and shortcuts",
+        serial, "tvhome_config", f"Customize {launcher_package} app tiles and shortcuts",
         before, after,
     )
     if manual_snapshot_used:
-        return "tv-detox layout updated. The previous layout was recorded from the manual snapshot you attested matched the TV. Undo will restore those supplied values."
-    return "tv-detox layout updated. Previous app/shortcut preferences were read directly and saved for exact Undo."
+        return f"{launcher_package} layout updated. The previous layout was recorded from the manual snapshot you attested matched the TV. Undo will restore those supplied values."
+    return f"{launcher_package} layout updated. Previous app/shortcut preferences were read directly and saved for exact Undo."
 
 
 def _set_home_component(adb: str, serial: str, component: str) -> None:
