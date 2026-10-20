@@ -47,17 +47,27 @@ if 'android:label="Home"' not in content:
     raise SystemExit("Could not find expected launcher label in AndroidManifest.xml")
 manifest.write_text(content.replace('android:label="Home"', 'android:label="FIZXIX Home"', 1), encoding="utf-8")
 
+# Pure black is the intended FIZXIX design, so remove the wallpaper chooser rather
+# than leaving an option that cannot visibly change the background.
+settings = root / "src" / "com" / "ansub" / "tvhome" / "MainActivity.java"
+settings_content = settings.read_text(encoding="utf-8")
+old_settings = 'private static final String[] SETTINGS_ITEMS = {"Wallpaper", "TV settings"};'
+new_settings = 'private static final String[] SETTINGS_ITEMS = {"TV settings"};'
+if settings_content.count(old_settings) != 1:
+    raise SystemExit("Could not safely locate the upstream Settings menu; refusing an ambiguous patch.")
+settings.write_text(settings_content.replace(old_settings, new_settings, 1), encoding="utf-8")
+
 activity = root / "src" / "com" / "ansub" / "tvhome" / "MainActivity.java"
 content = activity.read_text(encoding="utf-8")
-start_marker = "    // Static warm gradient, drawn once by the window: no extra view, no animation.\n"
-end_marker = "    private static GradientDrawable radial("
+start_marker = "    // Static gradient, drawn once by the window: no extra view, no animation.\n"
+end_marker = "    // The saved wallpaper, as an index into WALLPAPERS (Dusk if none is saved).\n"
 if content.count(start_marker) != 1 or content.count(end_marker) != 1:
     raise SystemExit("Could not safely locate the upstream background implementation; refusing an ambiguous patch.")
 start = content.index(start_marker)
 end = content.index(end_marker, start)
 black_background = (
     "    // FIZXIX skin: use a true black background instead of the stock gradient.\n"
-    "    private Drawable background() {\n"
+    "    private Drawable background(int[] c) {\n"
     "        return new ColorDrawable(Color.BLACK);\n"
     "    }\n\n"
 )
