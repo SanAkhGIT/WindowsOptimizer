@@ -354,8 +354,20 @@ class AndroidTvPanel(QWidget):
         apps_layout = QVBoxLayout(apps_box)
         self.apps_list = QListWidget()
         self.apps_list.setMinimumHeight(170)
-        self.apps_list.setSelectionMode(QAbstractItemView.SelectionMode.NoSelection)
+        self.apps_list.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         apps_layout.addWidget(self.apps_list)
+        order_row = QHBoxLayout()
+        move_up = QPushButton("Move tile up ↑")
+        move_up.clicked.connect(lambda: self._move_checked_tile(-1))
+        move_down = QPushButton("Move tile down ↓")
+        move_down.clicked.connect(lambda: self._move_checked_tile(1))
+        order_row.addWidget(move_up)
+        order_row.addWidget(move_down)
+        apps_layout.addLayout(order_row)
+        apps_hint = QLabel("Checked rows are used as tiles. Select a checked row and move it to change TV tile order.")
+        apps_hint.setObjectName("muted")
+        apps_hint.setWordWrap(True)
+        apps_layout.addWidget(apps_hint)
         pick_row.addWidget(apps_box, 2)
 
         quick_box = QGroupBox("Top-row shortcuts")
@@ -640,6 +652,27 @@ class AndroidTvPanel(QWidget):
         self._layout_loaded = True
         self.apply_layout_button.setEnabled(self._layout_readable)
         self.output.setPlainText(report + f"\n\nLaunchable package count: {len(packages)}")
+
+    def _move_checked_tile(self, direction):
+        selected = self.apps_list.currentItem()
+        if selected is None or selected.checkState() != Qt.CheckState.Checked:
+            QMessageBox.information(self, "Select a checked tile", "Select a checked app row first, then use Move tile up/down.")
+            return
+        items = [self.apps_list.takeItem(0) for _ in range(self.apps_list.count())]
+        checked = [item for item in items if item.checkState() == Qt.CheckState.Checked]
+        unchecked = [item for item in items if item.checkState() != Qt.CheckState.Checked]
+        current = checked.index(selected)
+        target = current + direction
+        if target < 0 or target >= len(checked):
+            ordered = checked + unchecked
+            for item in ordered:
+                self.apps_list.addItem(item)
+            self.apps_list.setCurrentItem(selected)
+            return
+        checked[current], checked[target] = checked[target], checked[current]
+        for item in checked + unchecked:
+            self.apps_list.addItem(item)
+        self.apps_list.setCurrentItem(selected)
 
     def apply_tv_layout(self):
         if not self._layout_loaded:
