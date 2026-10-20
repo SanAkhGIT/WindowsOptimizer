@@ -112,6 +112,16 @@ def parse_meminfo(output: str) -> dict[str, int]:
     return values
 
 
+def sha256_matches(data: bytes, digest: str) -> bool:
+    """Validate GitHub's sha256:<hex> asset digest using a constant-time comparison."""
+    if not digest or not digest.startswith("sha256:"):
+        return False
+    expected = digest.split(":", 1)[1].strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", expected):
+        return False
+    return hmac.compare_digest(hashlib.sha256(data).hexdigest(), expected)
+
+
 def _adb_path(preferred: str | None = None) -> str:
     if preferred:
         candidate = Path(os.path.expandvars(os.path.expanduser(preferred)))
@@ -719,9 +729,7 @@ def install_or_update_tv_detox(tv_ip: str = "192.168.0.21", port: int = 5555, ad
         raise RuntimeError(f"Could not verify/download the official tv-detox release: {exc}") from exc
     if len(apk) < 25_000 or len(apk) > 80 * 1024 * 1024 or not apk.startswith(b"PK"):
         raise RuntimeError("Downloaded file did not pass basic APK/ZIP sanity checks; it was not installed.")
-    expected_hex = expected_digest.split(":", 1)[1].strip().lower()
-    actual_hex = hashlib.sha256(apk).hexdigest()
-    if len(expected_hex) != 64 or not hmac.compare_digest(actual_hex, expected_hex):
+    if not sha256_matches(apk, expected_digest):
         raise RuntimeError("Downloaded tvhome.apk SHA-256 does not match the GitHub release digest; it was not installed.")
     apk_path.write_bytes(apk)
     result = _run_adb(adb, ("-s", serial, "install", "-r", str(apk_path)), timeout=180, check=False)
