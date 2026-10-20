@@ -12,6 +12,7 @@ from datetime import datetime, timezone
 import subprocess
 
 import psutil
+from core.process import hidden_console_kwargs
 
 
 @dataclass
@@ -204,6 +205,7 @@ def _powershell_json(script: str) -> dict | list:
         encoding="utf-8",
         errors="replace",
         timeout=30,
+        **hidden_console_kwargs(),
     )
     if result.returncode:
         raise RuntimeError(result.stderr.strip() or "PowerShell query failed.")
@@ -239,6 +241,7 @@ def windows_management_health() -> MaintenanceResult:
         ),
         details=data,
     )
+
 
 def run_daily_maintenance() -> list[MaintenanceResult]:
     """Run the daily suite. Each operation is isolated so one failure doesn't stop the rest."""
