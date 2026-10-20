@@ -532,7 +532,16 @@ def set_keep_screen_awake(enabled: bool, tv_ip: str = "192.168.0.21", port: int 
     key = "global.stay_on_while_plugged_in"
     before = {key: _read_setting(adb, serial, "global", "stay_on_while_plugged_in")}
     value = "3" if enabled else "0"
-    _put_setting(adb, serial, "global", "stay_on_while_plugged_in", value)
+    try:
+        _put_setting(adb, serial, "global", "stay_on_while_plugged_in", value)
+    except Exception as exc:
+        try:
+            _put_setting(adb, serial, "global", "stay_on_while_plugged_in", before[key])
+        except Exception as rollback_exc:
+            raise RuntimeError(
+                f"Changing stay_on_while_plugged_in failed ({exc}) and restoring its previous value also failed ({rollback_exc})."
+            ) from exc
+        raise
     _record_change(
         serial, "settings_batch",
         "Keep screen awake while plugged in" if enabled else "Restore screen sleep while plugged in",
