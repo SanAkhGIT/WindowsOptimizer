@@ -270,13 +270,28 @@ class AndroidTvPanel(QWidget):
         ui_layout.addLayout(anim_row)
 
         saver_row = QHBoxLayout()
-        saver_label = QLabel("Disable the Android screensaver setting. This may change idle-screen behavior.")
+        saver_label = QLabel("Screensaver: choose whether Android may launch its configured idle screensaver.")
         saver_label.setWordWrap(True)
-        saver_button = QPushButton("Disable screensaver")
-        saver_button.clicked.connect(self.turn_off_screensaver)
+        saver_off = QPushButton("Turn off")
+        saver_off.clicked.connect(self.turn_off_screensaver)
+        saver_on = QPushButton("Turn on")
+        saver_on.clicked.connect(self.turn_on_screensaver)
         saver_row.addWidget(saver_label, 1)
-        saver_row.addWidget(saver_button)
+        saver_row.addWidget(saver_on)
+        saver_row.addWidget(saver_off)
         ui_layout.addLayout(saver_row)
+
+        awake_row = QHBoxLayout()
+        awake_label = QLabel("Plugged-in display sleep: optionally keep the TV screen awake while powered.")
+        awake_label.setWordWrap(True)
+        awake_on = QPushButton("Keep awake")
+        awake_on.clicked.connect(self.keep_screen_awake)
+        awake_off = QPushButton("Allow sleep")
+        awake_off.clicked.connect(self.allow_screen_sleep)
+        awake_row.addWidget(awake_label, 1)
+        awake_row.addWidget(awake_on)
+        awake_row.addWidget(awake_off)
+        ui_layout.addLayout(awake_row)
         layout.addWidget(ui_group)
 
         maintenance = QGroupBox("Optional maintenance — no automatic undo")
@@ -672,6 +687,27 @@ class AndroidTvPanel(QWidget):
             "Set secure screensaver_enabled to 0?\n\nThe exact previous value will be saved for Undo.",
         ) == QMessageBox.StandardButton.Yes:
             self._async("Disable Android screensaver", tv.disable_screensaver)
+
+    def turn_on_screensaver(self):
+        if QMessageBox.question(
+            self, "Enable Android screensaver",
+            "Set secure screensaver_enabled to 1? The exact previous value will be saved for Undo.",
+        ) == QMessageBox.StandardButton.Yes:
+            self._async("Enable Android screensaver", lambda **params: tv.set_screensaver_enabled(True, **params))
+
+    def keep_screen_awake(self):
+        if QMessageBox.question(
+            self, "Keep screen awake while plugged in",
+            "Set stay_on_while_plugged_in to AC/USB flags (3)? This can prevent idle display sleep while the TV is powered. The exact prior value will be saved for Undo.",
+        ) == QMessageBox.StandardButton.Yes:
+            self._async("Keep screen awake while plugged in", lambda **params: tv.set_keep_screen_awake(True, **params))
+
+    def allow_screen_sleep(self):
+        if QMessageBox.question(
+            self, "Allow normal screen sleep",
+            "Set stay_on_while_plugged_in to 0 so normal plugged-in screen sleep can occur? The exact prior value will be saved for Undo.",
+        ) == QMessageBox.StandardButton.Yes:
+            self._async("Allow normal screen sleep", lambda **params: tv.set_keep_screen_awake(False, **params))
 
     def trim_caches(self):
         if QMessageBox.question(
