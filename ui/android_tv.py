@@ -222,6 +222,28 @@ class AndroidTvPanel(QWidget):
         info.setWordWrap(True)
         layout.addWidget(info)
 
+        presets = QGroupBox("Optimization presets")
+        preset_layout = QVBoxLayout(presets)
+        preset_row = QHBoxLayout()
+        preset_row.addWidget(QLabel("Choose a safe starting point:"))
+        self.optimization_preset = QComboBox()
+        self.optimization_preset.addItem("Balanced — animations at 0.5x", "balanced")
+        self.optimization_preset.addItem("Fast — animations off", "fast")
+        preset_row.addWidget(self.optimization_preset, 1)
+        apply_preset = QPushButton("Apply preset…")
+        apply_preset.setObjectName("primary")
+        apply_preset.clicked.connect(self.apply_optimization_preset)
+        preset_row.addWidget(apply_preset)
+        preset_layout.addLayout(preset_row)
+        preset_help = QLabel(
+            "Presets only change the three animation scales. They do not disable packages, alter network settings, "
+            "or remove system apps. The exact previous values are saved for Undo."
+        )
+        preset_help.setObjectName("muted")
+        preset_help.setWordWrap(True)
+        preset_layout.addWidget(preset_help)
+        layout.addWidget(presets)
+
         ui_group = QGroupBox("UI responsiveness")
         ui_layout = QVBoxLayout(ui_group)
         anim_row = QHBoxLayout()
@@ -509,6 +531,26 @@ class AndroidTvPanel(QWidget):
     def _package_change_done(self, label, value):
         self._show_result(label, value)
         self.refresh_candidates()
+
+    def apply_optimization_preset(self):
+        preset = self.optimization_preset.currentData()
+        if preset == "balanced":
+            title, message, operation = (
+                "Balanced preset",
+                "Set all three Android animation scales to 0.5x? This preserves short transitions and is reversible.",
+                tv.set_animation_scales_half,
+            )
+        elif preset == "fast":
+            title, message, operation = (
+                "Fast preset",
+                "Set all three Android animation scales to 0x? This removes animation effects and is reversible.",
+                tv.set_animation_scales_zero,
+            )
+        else:
+            QMessageBox.warning(self, "Unknown preset", "Select a supported optimization preset.")
+            return
+        if QMessageBox.question(self, title, message) == QMessageBox.StandardButton.Yes:
+            self._async(f"Apply {preset} animation preset", operation)
 
     def half_animations(self):
         if QMessageBox.question(
