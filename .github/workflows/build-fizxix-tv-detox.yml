@@ -66,6 +66,17 @@ jobs:
           test -s "dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt"
           grep -F "Upstream commit:" "dist/FIZXIX-TV-Detox-NOTICE.txt"
 
+      # Publish the validated APK before emulator testing so a slow/hung
+      # hosted emulator cannot prevent the user from downloading the launcher.
+      - name: Upload APK artifact
+        if: steps.build_fizxix.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FIZXIX-TV-Detox
+          path: dist/FIZXIX-TV-Detox*
+          if-no-files-found: error
+          retention-days: 30
+
       # The emulator runner can fail to boot on hosted CI even when the APK
       # built correctly. Keep the smoke check visible, but do not block publishing.
       - name: Smoke test on Android TV emulator
@@ -118,11 +129,3 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-      - name: Upload APK artifact
-        if: always() && steps.build_fizxix.outcome == 'success'
-        uses: actions/upload-artifact@v4
-        with:
-          name: FIZXIX-TV-Detox
-          path: dist/FIZXIX-TV-Detox*
-          if-no-files-found: error
-          retention-days: 30
