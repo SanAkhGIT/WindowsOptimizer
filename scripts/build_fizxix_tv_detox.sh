@@ -63,7 +63,7 @@ watermark = """        setContentView(scroller);
 
         // Fixed, subtle brand mark above the scroll view; it does not take remote focus.
         FrameLayout contentRoot = (FrameLayout) findViewById(android.R.id.content);
-        TextView watermark = text(px(20), 0xBFFFFFFF, regular);
+        TextView watermark = text(px(24), 0xBFFFFFFF, regular);
         watermark.setText("Modded by FIZXIX");
         watermark.setSingleLine(true);
         watermark.setClickable(false);
@@ -86,8 +86,7 @@ smoke = root / "ci" / "smoke-test.sh"
 smoke_content = smoke.read_text(encoding="utf-8")
 clock_check = """echo "$x" | grep -qE 'text="[0-9]{1,2}:[0-9]{2}"' || fail "no clock"
 """
-watermark_check = clock_check + """echo "$x" | grep -q 'text="Modded by FIZXIX"' || fail "no FIZXIX watermark
-"""
+watermark_check = clock_check + """echo "$x" | grep -q 'text="Modded by FIZXIX"' || fail "no FIZXIX watermark"\n"""
 if smoke_content.count(clock_check) != 1:
     raise SystemExit("Could not find exactly one clock smoke-test check; refusing an ambiguous patch.")
 smoke.write_text(smoke_content.replace(clock_check, watermark_check, 1), encoding="utf-8")
