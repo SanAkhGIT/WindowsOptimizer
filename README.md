@@ -37,7 +37,7 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
 - Android TV Control Center over ADB: device/launcher health, disabled-package inventory, memory/DNS/background diagnostics, review-first optional debloat, and exact local undo for recorded reversible changes
-- Android TV UI controls: open Settings without Google TV Home, switch between official TV Detox, the FIZXIX black-screen launcher and Google TV Home with verification/rollback, edit either alternative launcher's app tiles/shortcuts when the prior layout can be backed up, and adjust animation/screensaver settings
+- Android TV UI controls: left-side navigation, per-package toggles plus confirmed bulk enable/disable for detected reviewed optional apps, switch between official TV Detox, FIZXIX Home and Google TV Home, edit launcher tiles/shortcuts with backup safeguards, animation presets, reversible screensaver and plugged-in display-sleep controls
 - Optional cache trim and ART speed-profile compilation, explicitly marked as operations without an exact inverse; no app uninstall path
 
 ## Product principles
@@ -138,6 +138,15 @@ The project takes broad feature inspiration from established Windows utilities s
 ## Build
 
 Run build.bat to produce the Windows executable.
+
+## TV Detox upstream sync and FIZXIX Home publishing
+
+- The FIZXIX build fetches the current TV Detox upstream default-branch revision by default. For reproducible builds, set \`TV_DETOX_REF\` to a tag or commit SHA.
+- The **Build FIZXIX TV Detox** workflow can be run manually with an upstream branch/tag/commit and also runs weekly. The build records the exact upstream commit in \`FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt\` and its notice file.
+- The normal Windows executable workflow builds the branded APK, embeds it into WindowsOptimizer, runs Python tests and compilation, then publishes the EXE and APK provenance as one artifact.
+- Upstream source changes that no longer match the expected patch anchors intentionally fail the build rather than silently producing an incorrectly modified launcher. Review and adapt the patch when upstream UI internals change.
+- Installation on a Google TV device is an ADB sideload action initiated by the user in WindowsOptimizer; CI does not connect to or silently change a TV. This is not Google Play Store publication. Play Store distribution requires the relevant developer account, signing, listing, policy and review steps.
+- For in-place updates of an already installed FIZXIX Home, configure the persistent signing secrets \`FIZXIX_TVHOME_KEYSTORE_BASE64\` and \`FIZXIX_TVHOME_KEYSTORE_PASSWORD\`. Without the same signing key, Android may reject updates; the tool must not auto-uninstall the existing launcher.
 
 ## Android TV Control Center
 
