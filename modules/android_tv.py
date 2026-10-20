@@ -6,6 +6,8 @@ platform-critical packages. It does not require ADB to be on PATH.
 """
 from __future__ import annotations
 
+import hashlib
+import hmac
 import ipaddress
 import json
 import os
@@ -15,6 +17,7 @@ import uuid
 import xml.etree.ElementTree as ET
 from datetime import datetime, timezone
 from pathlib import Path
+from urllib.parse import urlparse
 from urllib.request import Request, urlopen
 
 from core.process import run_executable
@@ -30,7 +33,7 @@ GOOGLE_TV_LAUNCHERS = (
     "com.google.android.leanbacklauncher",
 )
 SETUP_PACKAGES = (GOOGLE_TV_SETUP,)
-TV_DETOX_APK_URL = "https://github.com/Ansub/tv-detox/releases/latest/download/tvhome.apk"
+TV_DETOX_RELEASE_API = "https://api.github.com/repos/Ansub/tv-detox/releases/latest"
 
 # These are review candidates, never automatically selected. The target device must
 # actually contain the package, and the user confirms every individual operation.
@@ -696,14 +699,30 @@ def install_or_update_tv_detox(tv_ip: str = "192.168.0.21", port: int = 5555, ad
     folder = base / "WindowsOptimizer" / "android-tv"
     folder.mkdir(parents=True, exist_ok=True)
     apk_path = folder / "tvhome.apk"
-    request = Request(TV_DETOX_APK_URL, headers={"User-Agent": "WindowsOptimizer Android TV module"})
+    headers = {"User-Agent": "WindowsOptimizer Android TV module", "Accept": "application/vnd.github+json"}
     try:
-        with urlopen(request, timeout=90) as response:
+        with urlopen(Request(TV_DETOX_RELEASE_API, headers=headers), timeout=30) as response:
+            release = json.loads(response.read(2 * 1024 * 1024).decode("utf-8"))
+        asset = next((item for item in release.get("assets", []) if item.get("name") == "tvhome.apk"), None)
+        if not asset:
+            raise RuntimeError("The latest GitHub release does not expose a tvhome.apk asset.")
+        asset_url = asset.get("browser_download_url", "")
+        parsed_url = urlparse(asset_url)
+        if parsed_url.scheme != "https" or parsed_url.netloc.lower() != "github.com" or "/releases/download/" not in parsed_url.path:
+            raise RuntimeError("The release asset URL is not an approved HTTPS GitHub release URL.")
+        expected_digest = asset.get("digest")
+        if not expected_digest or not expected_digest.startswith("sha256:"):
+            raise RuntimeError("GitHub did not publish a SHA-256 digest for tvhome.apk; refusing an unverifiable install.")
+        with urlopen(Request(asset_url, headers={"User-Agent": "WindowsOptimizer Android TV module"}), timeout=90) as response:
             apk = response.read(80 * 1024 * 1024 + 1)
     except Exception as exc:
-        raise RuntimeError(f"Could not download the official tv-detox release: {exc}") from exc
+        raise RuntimeError(f"Could not verify/download the official tv-detox release: {exc}") from exc
     if len(apk) < 25_000 or len(apk) > 80 * 1024 * 1024 or not apk.startswith(b"PK"):
         raise RuntimeError("Downloaded file did not pass basic APK/ZIP sanity checks; it was not installed.")
+    expected_hex = expected_digest.split(":", 1)[1].strip().lower()
+    actual_hex = hashlib.sha256(apk).hexdigest()
+    if len(expected_hex) != 64 or not hmac.compare_digest(actual_hex, expected_hex):
+        raise RuntimeError("Downloaded tvhome.apk SHA-256 does not match the GitHub release digest; it was not installed.")
     apk_path.write_bytes(apk)
     result = _run_adb(adb, ("-s", serial, "install", "-r", str(apk_path)), timeout=180, check=False)
     if "success" not in result.lower():
