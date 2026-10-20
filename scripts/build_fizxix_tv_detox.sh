@@ -80,7 +80,18 @@ if content.count(needle) != 1:
     raise SystemExit("Could not safely locate setContentView(scroller); refusing to insert duplicate watermark.")
 content = content.replace(needle, watermark, 1)
 activity.write_text(content, encoding="utf-8")
-print("Applied FIZXIX skin: side-by-side package, black background, bottom-right watermark.")
+
+# Extend the upstream emulator smoke test to assert that the brand watermark is visible.
+smoke = root / "ci" / "smoke-test.sh"
+smoke_content = smoke.read_text(encoding="utf-8")
+clock_check = """echo "$x" | grep -qE 'text="[0-9]{1,2}:[0-9]{2}"' || fail "no clock"
+"""
+watermark_check = clock_check + """echo "$x" | grep -q 'text="Modded by FIZXIX"' || fail "no FIZXIX watermark
+"""
+if smoke_content.count(clock_check) != 1:
+    raise SystemExit("Could not find exactly one clock smoke-test check; refusing an ambiguous patch.")
+smoke.write_text(smoke_content.replace(clock_check, watermark_check, 1), encoding="utf-8")
+print("Applied FIZXIX skin: side-by-side package, black background, bottom-right watermark and a UI smoke assertion.")
 PY
 
 cd "$SOURCE_DIR"
