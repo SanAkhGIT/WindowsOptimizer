@@ -150,19 +150,13 @@ settings_method = """    // v1.5.3 logs from the physical gear press: KEYCODE_NO
 
     private void openFizxixTvSettings() {
         try {
-            startActivity(new Intent()
-                    .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
+            startActivity(new Intent("com.android.tv.settings.CONNECTED_DEVICES")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            android.util.Log.i("FIZXIX-Remote", "Opened main TV Settings from remote key.");
-        } catch (Exception explicitFailure) {
-            android.util.Log.w("FIZXIX-Remote", "Explicit TV Settings launch failed; trying ACTION_SETTINGS.",
-                    explicitFailure);
-            try {
-                startActivity(new Intent(Settings.ACTION_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            } catch (Exception fallbackFailure) {
-                android.util.Log.e("FIZXIX-Remote", "Could not open TV Settings.", fallbackFailure);
-            }
+            android.util.Log.i("FIZXIX-Remote",
+                    "Requested connected devices / Accessories list from remote key.");
+        } catch (Exception launchFailure) {
+            android.util.Log.e("FIZXIX-Remote",
+                    "Could not open connected devices / Accessories list.", launchFailure);
         }
     }
 
@@ -212,7 +206,7 @@ version_match = 'android:versionCode="14" android:versionName="1.5.1"'
 if manifest_content.count(version_match) != 1:
     raise SystemExit("Could not safely bump the expected upstream app version.")
 manifest_content = manifest_content.replace(version_match,
-    'android:versionCode="17" android:versionName="1.5.4"', 1)
+    'android:versionCode="18" android:versionName="1.5.5"', 1)
 service_manifest = """        <service
             android:name=".RemoteKeyAccessibilityService"
             android:label="FIZXIX Remote Key Handler"
@@ -336,18 +330,11 @@ public final class RemoteKeyAccessibilityService extends AccessibilityService {
 
     private void openTvSettings() {
         try {
-            startActivity(new Intent()
-                    .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
+            startActivity(new Intent("com.android.tv.settings.CONNECTED_DEVICES")
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            Log.i(TAG, "Requested main TV Settings.");
-        } catch (Exception explicitFailure) {
-            Log.w(TAG, "Explicit Settings component failed; trying ACTION_SETTINGS.", explicitFailure);
-            try {
-                startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)
-                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
-            } catch (Exception fallbackFailure) {
-                Log.e(TAG, "Unable to launch TV Settings.", fallbackFailure);
-            }
+            Log.i(TAG, "Requested connected devices / Accessories list.");
+        } catch (Exception launchFailure) {
+            Log.e(TAG, "Could not open connected devices / Accessories list.", launchFailure);
         }
     }
 
