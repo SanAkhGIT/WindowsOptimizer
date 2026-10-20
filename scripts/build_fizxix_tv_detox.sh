@@ -126,18 +126,19 @@ if content.count(needle) != 1:
 content = content.replace(needle, watermark, 1)
 activity.write_text(content, encoding="utf-8")
 
-# Route the remote's Settings/Menu key directly to Bluetooth settings, without an extra on-screen gear.
+# Route the remote Settings/Menu key to the main TV Settings screen, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
 method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
 settings_method = """    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_SETTINGS || keyCode == KeyEvent.KEYCODE_MENU) {
             try {
-                startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                startActivity(new Intent()
+                        .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
                         .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
             } catch (Exception ignored) {
                 try {
-                    startActivity(new Intent("com.google.android.intent.action.CONNECT_INPUT")
+                    startActivity(new Intent(Settings.ACTION_SETTINGS)
                             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
                 } catch (Exception ignoredAgain) {}
             }
@@ -148,7 +149,7 @@ settings_method = """    @Override
 
 """
 if content.count(method_anchor) != 1:
-    raise SystemExit("Could not safely locate onCreate for Bluetooth key handler insertion.")
+    raise SystemExit("Could not safely locate onCreate for Settings key handler insertion.")
 content = content.replace(method_anchor, settings_method + method_anchor, 1)
 activity.write_text(content, encoding="utf-8")
 
@@ -161,7 +162,7 @@ watermark_check = clock_check + """echo "$x" | grep -q 'text="Modded by FIZXIX"'
 if smoke_content.count(clock_check) != 1:
     raise SystemExit("Could not find exactly one clock smoke-test check; refusing an ambiguous patch.")
 smoke.write_text(smoke_content.replace(clock_check, watermark_check, 1), encoding="utf-8")
-print("Applied FIZXIX skin: black background, watermark, no extra gear, remote Settings/Menu key routes directly to Bluetooth settings.")
+print("Applied FIZXIX skin: black background, watermark, no extra gear, remote Settings/Menu key routes to the main TV Settings screen.")
 PY
 
 cd "$SOURCE_DIR"
