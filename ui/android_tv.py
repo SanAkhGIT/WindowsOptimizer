@@ -76,6 +76,8 @@ class AndroidTvPanel(QWidget):
         root.addWidget(connection)
 
         self.tabs = QTabWidget()
+        self.tabs.setTabPosition(QTabWidget.TabPosition.West)
+        self.tabs.setMovable(False)
         root.addWidget(self.tabs, 1)
         self._build_health_tab()
         self._build_debloat_tab()
@@ -171,7 +173,7 @@ class AndroidTvPanel(QWidget):
         self.details.setPlaceholderText("Connect and scan to view the TV report.")
         self.details.setMinimumHeight(230)
         layout.addWidget(self.details, 1)
-        self.tabs.addTab(page, "Device health")
+        self.tabs.addTab(page, "Overview")
 
     def _build_debloat_tab(self):
         page = QWidget()
@@ -193,7 +195,13 @@ class AndroidTvPanel(QWidget):
         disable.clicked.connect(lambda: self.change_selected_package(False))
         enable = QPushButton("Restore selected")
         enable.clicked.connect(lambda: self.change_selected_package(True))
+        bulk_off = QPushButton("Disable all detected optional")
+        bulk_off.clicked.connect(lambda: self.bulk_change_packages(False))
+        bulk_on = QPushButton("Restore all disabled optional")
+        bulk_on.clicked.connect(lambda: self.bulk_change_packages(True))
         row.addWidget(refresh)
+        row.addWidget(bulk_off)
+        row.addWidget(bulk_on)
         row.addStretch()
         row.addWidget(disable)
         row.addWidget(enable)
@@ -208,7 +216,7 @@ class AndroidTvPanel(QWidget):
         self.candidate_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.candidate_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
         layout.addWidget(self.candidate_table, 1)
-        self.tabs.addTab(page, "Debloat")
+        self.tabs.addTab(page, "Apps & features")
 
     def _build_optimization_tab(self):
         page = QWidget()
@@ -289,7 +297,7 @@ class AndroidTvPanel(QWidget):
         maintenance_layout.addLayout(compile_row)
         layout.addWidget(maintenance)
         layout.addStretch(1)
-        self.tabs.addTab(page, "Optimization")
+        self.tabs.addTab(page, "Performance")
 
     def _build_launcher_tab(self):
         page = QWidget()
@@ -444,7 +452,7 @@ class AndroidTvPanel(QWidget):
         custom_layout.addWidget(self.apply_layout_button)
         layout.addWidget(custom)
         layout.addStretch(1)
-        self.tabs.addTab(page, "Launcher & UI")
+        self.tabs.addTab(page, "Home & layout")
 
     def connect_device(self):
         self._async("Connect to Android TV", tv.connect)
@@ -530,6 +538,71 @@ class AndroidTvPanel(QWidget):
 
     def _package_change_done(self, label, value):
         self._show_result(label, value)
+        self.refresh_candidates()
+
+    def bulk_change_packages(self, restore):
+        """Bulk-toggle only reviewed candidates that are currently in the opposite state."""
+        target_state = "disabled" if restore else "enabled"
+        candidates = [
+            item for item in self._candidate_data
+            if item.get("state") == target_state and item.get("package") in tv.DEBLOAT_CANDIDATES
+        ]
+        verb = "restore" if restore else "disable"
+        if not candidates:
+            QMessageBox.information(
+                self, "Nothing to change",
+                f"No detected reviewed optional packages are currently {target_state}. Refresh the list first.",
+            )
+            return
+        names = "\n".join(f"• {item['package']}" for item in candidates)
+        warning = (
+            "Only reviewed optional packages detected on this TV are included. Core Android, Google Play, "
+            "System UI, Settings, input, vendor, and launcher packages are excluded. Each successful change "
+            "is verified and journaled; no packages are uninstalled. Some optional features may stop working."
+        )
+        answer = QMessageBox.question(
+            self, f"Confirm {verb} all detected optional packages",
+            f"{verb.title()} {len(candidates)} detected package(s)?\n\n{names}\n\n{warning}",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.No,
+        )
+        if answer != QMessageBox.StandardButton.Yes:
+            return
+        try:
+            params = self._params()
+        except Exception as exc:
+            QMessageBox.warning(self, "Connection details", str(exc))
+            return
+        action = tv.enable_package if restore else tv.disable_package
+        label = f"{verb.title()} all detected optional packages"
+        self.connection_status.setText(f"Working: {label}…")
+
+        def task():
+            results = []
+            for item in candidates:
+                package = item["package"]
+                try:
+                    results.append({"package": package, "result": action(package, **params)})
+                except Exception as exc:
+                    results.append({"package": package, "error": str(exc)})
+            return {"action": label, "results": results}
+
+        self.run_job(
+            task,
+            done=lambda result: self._bulk_package_change_done(label, result),
+            fail=lambda error: self._show_error(label, error),
+            label=label,
+        )
+
+    def _bulk_package_change_done(self, label, result):
+        rows = result.get("results", []) if isinstance(result, dict) else []
+        succeeded = sum("result" in row for row in rows)
+        failed = len(rows) - succeeded
+        summary = f"{label}: {succeeded} succeeded, {failed} failed.\n\n"
+        summary += json.dumps(result, indent=2, ensure_ascii=False)
+        self.connection_status.setText(f"Complete: {succeeded} succeeded, {failed} failed")
+        self.output.setPlainText(summary)
+        self._show_detail(summary)
         self.refresh_candidates()
 
     def apply_optimization_preset(self):
