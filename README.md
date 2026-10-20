@@ -36,6 +36,9 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Repair Center: Explorer, SFC, DISM CheckHealth/ScanHealth/RestoreHealth and Windows Update reset
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
+- Android TV Control Center over ADB: device/launcher health, disabled-package inventory, memory/DNS/background diagnostics, review-first optional debloat, and exact local undo for recorded reversible changes
+- Android TV UI controls: left-side navigation, per-package toggles plus confirmed bulk enable/disable for detected reviewed optional apps, switch between official TV Detox, FIZXIX Home and Google TV Home, edit launcher tiles/shortcuts with backup safeguards, animation presets, reversible screensaver and plugged-in display-sleep controls
+- Optional cache trim and ART speed-profile compilation, explicitly marked as operations without an exact inverse; no app uninstall path
 
 ## Product principles
 
@@ -47,6 +50,9 @@ It is designed as a long-lived local Windows utility rather than a collection of
 6. Debloat must be selective and reversible, not a destructive package purge.
 7. Long-running work must not freeze the GUI.
 8. The GUI is only a shell; Windows operations live in testable modules.
+9. Android TV management uses a separate ADB module and never feeds device packages into the Windows AppX debloater.
+10. Android TV package changes use a strict optional-package allowlist, require an explicit per-package confirmation in the UI, verify their result, and never uninstall apps.
+11. Launcher changes must verify the resolved Home activity and attempt to restore the prior Home on failure; stock launcher/setup packages are not blindly disabled.
 
 ## Product direction
 
@@ -132,6 +138,31 @@ The project takes broad feature inspiration from established Windows utilities s
 ## Build
 
 Run build.bat to produce the Windows executable.
+
+## TV Detox upstream sync and FIZXIX Home publishing
+
+- The FIZXIX build fetches the current TV Detox upstream default-branch revision by default. For reproducible builds, set \`TV_DETOX_REF\` to a tag or commit SHA.
+- The **Build FIZXIX TV Detox** workflow can be run manually with an upstream branch/tag/commit and also runs weekly. The build records the exact upstream commit in \`FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt\` and its notice file.
+- The normal Windows executable workflow builds the branded APK, embeds it into WindowsOptimizer, runs Python tests and compilation, then publishes the EXE and APK provenance as one artifact.
+- Upstream source changes that no longer match the expected patch anchors intentionally fail the build rather than silently producing an incorrectly modified launcher. Review and adapt the patch when upstream UI internals change.
+- Installation on a Google TV device is an ADB sideload action initiated by the user in WindowsOptimizer; CI does not connect to or silently change a TV. This is not Google Play Store publication. Play Store distribution requires the relevant developer account, signing, listing, policy and review steps.
+- For in-place updates of an already installed FIZXIX Home, configure the persistent signing secrets \`FIZXIX_TVHOME_KEYSTORE_BASE64\` and \`FIZXIX_TVHOME_KEYSTORE_PASSWORD\`. Without the same signing key, Android may reject updates; the tool must not auto-uninstall the existing launcher.
+
+## Android TV Control Center
+
+1. Connect the Windows PC and Android/Google TV to the same network. Enable network ADB on the TV and authorize the PC on the TV's prompt.
+2. Open **Android TV** from the sidebar. Enter the TV's IP and ADB TCP port (classic ADB is commonly port 5555) and select Google Platform-Tools adb.exe if automatic discovery does not find it.
+3. Run **Read device health** first. It is read-only and reports the active Home component, enabled/disabled launchers and setup package, disabled package inventory, MemFree and MemAvailable separately, private DNS, animation/screensaver settings, and background state for known media apps.
+4. Debloat candidates are optional and device-dependent. The table does not preselect packages; use one package at a time and read its trade-off. Google Play/GMS/GSF, Settings, System UI, permission controller, WebView, TTS, keyboard/input, Bluetooth/CEC/input, remote-pairing, OTA/upgrade, setup, and Droidlogic/SDT vendor packages are excluded from the debloat allowlist.
+5. Home switching captures the previous Home, verifies the new component, and attempts rollback if verification fails. Restoring Google TV Home may re-enable com.google.android.apps.tv.launcherx; it does not uninstall tv-detox or change the setup wizard. **Emergency recovery command for the configured TV:**
+
+   adb -s 192.168.0.21:5555 shell pm enable com.google.android.apps.tv.launcherx
+
+6. The Launcher & UI tab can edit the tile order and Bluetooth/Sound/Picture shortcuts for either **Official TV Detox** or **FIZXIX Home**. It reads preferences through Android's run-as interface where available; if the APK blocks readback, use the manual-snapshot mode and enter the current app tile package IDs in exact on-screen order (or explicitly confirm automatic discovery) and current shortcuts. The snapshot becomes Undo's restore state; do not guess these values.
+7. To build the black **FIZXIX Home** launcher, open the [FIZXIX APK build workflow](https://github.com/SanAkhGIT/WindowsOptimizer/actions/workflows/build-fizxix-tv-detox.yml), open its latest successful run, and download the **FIZXIX-TV-Detox** artifact. Extract **FIZXIX-TV-Detox.apk**, select it in Windows Optimizer, then choose **Set FIZXIX Home as Home** if desired. It installs side-by-side as `com.fizxix.tvhome`; official TV Detox is not replaced. Build artifacts expire after 30 days. Unless repository secrets `FIZXIX_TVHOME_KEYSTORE_BASE64` and `FIZXIX_TVHOME_KEYSTORE_PASSWORD` are configured with a persistent signing key, a later build may not update an already-installed FIZXIX APK in place. The tool never uninstalls it automatically.
+8. Reversible changes are recorded in %LOCALAPPDATA%\WindowsOptimizer\android-tv\changes.jsonl. **Undo latest reversible change** replays one exact inverse at a time, newest first. Cache trimming and ART recompilation are recorded as having no automatic inverse; they remain untouched and are named in the undo result while the tool finds the newest reversible change.
+
+Android TV functionality is inspired by and designed to interoperate with [Ansub/tv-detox](https://github.com/Ansub/tv-detox), an MIT-licensed home screen. The official installer reads release metadata, verifies the published SHA-256 digest, and never uninstalls an incompatible package. The optional FIZXIX build fetches the current upstream default branch unless a ref is explicitly pinned, then applies the black background, bottom-right watermark and separate package ID; it does not replace the official application source or modify a connected TV during build.
 
 The goal is a clean, explainable optimizer that grows into a serious Windows management tool without becoming an unsafe "apply everything" script.
 

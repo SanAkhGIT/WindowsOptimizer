@@ -1,0 +1,131 @@
+name: Build FIZXIX TV Detox
+
+on:
+  workflow_dispatch:
+    inputs:
+      upstream_ref:
+        description: "TV Detox branch, tag, or commit SHA (HEAD uses the current default branch)"
+        required: false
+        default: "HEAD"
+        type: string
+  schedule:
+    - cron: "23 6 * * 1"
+  push:
+    branches: [main, "feature/**"]
+    paths:
+      - "scripts/build_fizxix_tv_detox.sh"
+      - ".github/workflows/build-fizxix-tv-detox.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  build-apk:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Windows Optimizer
+        uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK platform and build tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+
+      - name: Configure persistent signing key when repository secrets are available
+        env:
+          KEYSTORE_B64: ${{ secrets.FIZXIX_TVHOME_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.FIZXIX_TVHOME_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fizxix-tvhome.jks"
+            echo "KEYSTORE=$RUNNER_TEMP/fizxix-tvhome.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASS=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "Using configured persistent signing key."
+          else
+            echo "::warning::No persistent FIZXIX signing key configured. This build will work for first installation, but a future build signed with a different key cannot update it in place."
+          fi
+
+      - name: Build black FIZXIX launcher from selected upstream revision
+        id: build_fizxix
+        env:
+          TV_DETOX_REF: ${{ github.event.inputs.upstream_ref || 'HEAD' }}
+        run: bash scripts/build_fizxix_tv_detox.sh
+
+      - name: Validate launcher APK and upstream provenance
+        run: |
+          APK="dist/FIZXIX-TV-Detox.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.fizxix.tvhome'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$APK"
+          test -s "dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt"
+          grep -F "Upstream commit:" "dist/FIZXIX-TV-Detox-NOTICE.txt"
+
+      # Publish the validated APK before emulator testing so a slow/hung
+      # hosted emulator cannot prevent the user from downloading the launcher.
+      - name: Upload APK artifact
+        if: steps.build_fizxix.outcome == 'success'
+        uses: actions/upload-artifact@v4
+        with:
+          name: FIZXIX-TV-Detox
+          path: dist/FIZXIX-TV-Detox*
+          if-no-files-found: error
+          retention-days: 30
+
+      # The emulator runner can fail to boot on hosted CI even when the APK
+      # built correctly. Keep the smoke check visible, but do not block publishing.
+      - name: Smoke test on Android TV emulator
+        id: emulator_smoke
+        continue-on-error: true
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          disable-animations: true
+          script: |
+            sh "$RUNNER_TEMP/tv-detox-fizxix/ci/smoke-test.sh" emulator-5554 "$RUNNER_TEMP/fizxix-smoke.png"
+
+      - name: Verify black background in the rendered screenshot
+        if: steps.emulator_smoke.outcome == 'success'
+        run: |
+          python -m pip install --quiet Pillow
+          python - "$RUNNER_TEMP/fizxix-smoke.png" <<'PY'
+          from pathlib import Path
+          import sys
+          from PIL import Image
+
+          image_path = Path(sys.argv[1])
+          if not image_path.is_file():
+              raise SystemExit("Android TV smoke screenshot is missing.")
+          with Image.open(image_path) as image:
+              rgb = image.convert("RGB")
+              width, height = rgb.size
+              samples = {
+                  "top-left": rgb.getpixel((8, 8)),
+                  "top-right": rgb.getpixel((width - 8, 8)),
+                  "bottom-left": rgb.getpixel((8, height - 8)),
+                  "bottom-right": rgb.getpixel((width - 8, height - 8)),
+              }
+          nonblack = {name: value for name, value in samples.items() if value != (0, 0, 0)}
+          print(f"Background corner samples: {samples}")
+          if nonblack:
+              raise SystemExit(f"Expected pure black background corners, got {nonblack}")
+          print("PASS: sampled screen corners are pure black.")
+          PY
+
+      - name: Upload emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FIZXIX-TV-Detox-Smoke-Test
+          path: ${{ runner.temp }}/fizxix-smoke*.png
+          if-no-files-found: ignore
+          retention-days: 7
+

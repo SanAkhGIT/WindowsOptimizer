@@ -2,7 +2,9 @@ name: Build Windows Executable
 
 on:
   push:
-    branches: [main]
+    branches: [main, "feature/**"]
+  schedule:
+    - cron: "41 6 * * 1"
   workflow_dispatch:
 
 concurrency:
@@ -16,11 +18,73 @@ env:
   QT_QPA_PLATFORM: offscreen
 
 jobs:
-  build-windows:
-    runs-on: windows-latest
+  build-fizxix-apk:
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Set up Java 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Install Android SDK platform and build tools
+        run: |
+          yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" "platforms;android-34" "build-tools;34.0.0" >/dev/null
+
+      - name: Configure persistent signing key when available
+        env:
+          KEYSTORE_B64: ${{ secrets.FIZXIX_TVHOME_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.FIZXIX_TVHOME_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PASSWORD" ]; then
+            printf '%s' "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/fizxix-tvhome.jks"
+            echo "KEYSTORE=$RUNNER_TEMP/fizxix-tvhome.jks" >> "$GITHUB_ENV"
+            echo "KEYSTORE_PASS=$KEYSTORE_PASSWORD" >> "$GITHUB_ENV"
+            echo "Using configured persistent FIZXIX signing key."
+          else
+            echo "::warning::Persistent FIZXIX signing key is not configured. This build can install fresh, but a future build may not update it in place."
+          fi
+
+      - name: Build FIZXIX Home APK
+        run: bash scripts/build_fizxix_tv_detox.sh
+
+      - name: Validate launcher APK and upstream provenance
+        run: |
+          APK="dist/FIZXIX-TV-Detox.apk"
+          test -s "$APK"
+          unzip -t "$APK" >/dev/null
+          "$ANDROID_HOME/build-tools/34.0.0/aapt" dump badging "$APK" | grep -F "package: name='com.fizxix.tvhome'"
+          "$ANDROID_HOME/build-tools/34.0.0/apksigner" verify "$APK"
+          test -s "dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt"
+          grep -F "Upstream commit:" "dist/FIZXIX-TV-Detox-NOTICE.txt"
+
+      - name: Upload embedded launcher payload
+        uses: actions/upload-artifact@v4
+        with:
+          name: fizxix-embedded-payload
+          path: |
+            dist/FIZXIX-TV-Detox.apk
+            dist/FIZXIX-TV-Detox-LICENSE.txt
+            dist/FIZXIX-TV-Detox-NOTICE.txt
+            dist/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt
+          if-no-files-found: error
+          retention-days: 1
+
+  build-windows:
+    runs-on: windows-latest
+    needs: build-fizxix-apk
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download embedded launcher payload
+        uses: actions/download-artifact@v4
+        with:
+          name: fizxix-embedded-payload
+          path: build_assets
 
       - name: Set up Python
         uses: actions/setup-python@v5
@@ -38,8 +102,8 @@ jobs:
       - name: Compile Python modules
         run: python -m compileall -q .
 
-      - name: Build executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --add-data "extensions;extensions" --name WindowsOptimizer main.py
+      - name: Build executable with embedded FIZXIX Home
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --add-data "extensions;extensions" --add-data "build_assets;build_assets" --name WindowsOptimizer main.py
 
       - name: Upload executable
         uses: actions/upload-artifact@v4

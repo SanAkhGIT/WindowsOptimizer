@@ -53,6 +53,7 @@ from ui.windows_management import WindowsManagementPanel
 from ui.gaming_center import GamingCenterPanel
 from ui.storage_center import StorageCenterPanel
 from ui.developer_center import DeveloperCenterPanel
+from ui.android_tv import AndroidTvPanel
 from ui.profile_manager import ProfileManagerDialog
 
 
@@ -70,6 +71,7 @@ class MainWindow(QMainWindow):
         ("✓", "Fixes"),
         ("◇", "Edge Extensions"),
         ("◷", "Maintenance"),
+        ("▣", "Android TV"),
     )
 
     def __init__(self):
@@ -202,6 +204,7 @@ class MainWindow(QMainWindow):
         self._build_repairs_page()
         self.stack.addWidget(BrowserExtensionsPanel(self.output))
         self.stack.addWidget(MaintenancePanel(self.output, self._run_job))
+        self.stack.addWidget(AndroidTvPanel(self.output, self._run_job))
 
     def _build_tweaks_page(self):
         from PySide6.QtWidgets import QCheckBox, QComboBox, QGroupBox, QScrollArea, QTabWidget

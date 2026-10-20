@@ -4,6 +4,7 @@ import platform
 import subprocess
 
 import psutil
+from core.process import hidden_console_kwargs
 
 
 _LAPTOP_CHASSIS = {"8", "9", "10", "11", "12", "14", "18", "21", "30", "31", "32"}
@@ -31,7 +32,12 @@ $chassis = @(Get-CimInstance Win32_SystemEnclosure | Select-Object -Expand Chass
 """
     result = subprocess.run(
         ["powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=20,
+        **hidden_console_kwargs(),
     )
     if result.returncode:
         return {}

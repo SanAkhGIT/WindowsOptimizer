@@ -14,6 +14,20 @@ class ProcessResult:
     stderr: str
 
 
+def hidden_console_kwargs():
+    """Return subprocess options that prevent helper consoles from flashing on Windows."""
+    if sys.platform != "win32":
+        return {}
+
+    startupinfo = subprocess.STARTUPINFO()
+    startupinfo.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    startupinfo.wShowWindow = subprocess.SW_HIDE
+    return {
+        "creationflags": subprocess.CREATE_NO_WINDOW,
+        "startupinfo": startupinfo,
+    }
+
+
 def _decode_output(data):
     """Decode Windows command output without corrupting OEM-console text."""
     if not data:
@@ -55,6 +69,7 @@ def run_executable(executable, args=(), timeout=120):
             capture_output=True,
             text=False,
             timeout=timeout,
+            **hidden_console_kwargs(),
         )
     except subprocess.TimeoutExpired:
         logger.exception("Process timed out | executable=%s | timeout=%s | elapsed=%.2fs", executable, timeout, time.monotonic() - started)
