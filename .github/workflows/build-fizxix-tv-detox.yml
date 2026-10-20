@@ -73,6 +73,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: FIZXIX-TV-Detox
-          path: dist/FIZXIX-TV-Detox.apk
+          path: dist/FIZXIX-TV-Detox*
           if-no-files-found: error
           retention-days: 30
