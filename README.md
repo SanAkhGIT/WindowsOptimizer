@@ -36,6 +36,9 @@ It is designed as a long-lived local Windows utility rather than a collection of
 - Repair Center: Explorer, SFC, DISM CheckHealth/ScanHealth/RestoreHealth and Windows Update reset
 - Daily maintenance scheduler with age-based temp/crash cleanup and system health checks
 - Managed Microsoft Edge extension installer with bundled Netflix 4K extension
+- Android TV Control Center over ADB: device/launcher health, disabled-package inventory, memory/DNS/background diagnostics, review-first optional debloat, and exact local undo for recorded reversible changes
+- Android TV UI controls: open Settings without Google TV Home, set tv-detox as Home with verification/rollback, restore Google TV Home safely, edit tv-detox app tiles/shortcuts when the prior layout can be backed up, and adjust animation/screensaver settings
+- Optional cache trim and ART speed-profile compilation, explicitly marked as operations without an exact inverse; no app uninstall path
 
 ## Product principles
 
@@ -47,6 +50,9 @@ It is designed as a long-lived local Windows utility rather than a collection of
 6. Debloat must be selective and reversible, not a destructive package purge.
 7. Long-running work must not freeze the GUI.
 8. The GUI is only a shell; Windows operations live in testable modules.
+9. Android TV management uses a separate ADB module and never feeds device packages into the Windows AppX debloater.
+10. Android TV package changes use a strict optional-package allowlist, require an explicit per-package confirmation in the UI, verify their result, and never uninstall apps.
+11. Launcher changes must verify the resolved Home activity and attempt to restore the prior Home on failure; stock launcher/setup packages are not blindly disabled.
 
 ## Product direction
 
@@ -132,6 +138,21 @@ The project takes broad feature inspiration from established Windows utilities s
 ## Build
 
 Run build.bat to produce the Windows executable.
+
+## Android TV Control Center
+
+1. Connect the Windows PC and Android/Google TV to the same network. Enable network ADB on the TV and authorize the PC on the TV's prompt.
+2. Open **Android TV** from the sidebar. Enter the TV's IP and ADB TCP port (classic ADB is commonly port 5555) and select Google Platform-Tools adb.exe if automatic discovery does not find it.
+3. Run **Read device health** first. It is read-only and reports the active Home component, enabled/disabled launchers and setup package, disabled package inventory, MemFree and MemAvailable separately, private DNS, animation/screensaver settings, and background state for known media apps.
+4. Debloat candidates are optional and device-dependent. The table does not preselect packages; use one package at a time and read its trade-off. Google Play/GMS/GSF, Settings, System UI, permission controller, WebView, TTS, keyboard/input, Bluetooth/CEC/input, remote-pairing, OTA/upgrade, setup, and Droidlogic/SDT vendor packages are excluded from the debloat allowlist.
+5. Home switching captures the previous Home, verifies the new component, and attempts rollback if verification fails. Restoring Google TV Home may re-enable com.google.android.apps.tv.launcherx; it does not uninstall tv-detox or change the setup wizard. **Emergency recovery command for the configured TV:**
+
+   adb -s 192.168.0.21:5555 shell pm enable com.google.android.apps.tv.launcherx
+
+6. Tile/shortcut editing first reads tv-detox's private layout through Android's run-as interface. If the installed release does not permit that, the UI refuses to overwrite an unknown configuration; edit the tiles on the TV by holding OK on a tile instead.
+7. Reversible changes are recorded in %LOCALAPPDATA%\\WindowsOptimizer\\android-tv\\changes.jsonl. **Undo latest recorded change** replays one inverse only, newest first. Cache trimming and ART recompilation are recorded as having no automatic inverse, and the Undo button will not silently skip past them.
+
+Android TV functionality is inspired by and designed to interoperate with [Ansub/tv-detox](https://github.com/Ansub/tv-detox), an MIT-licensed home screen. WindowsOptimizer does not bundle its source; the optional install/update action downloads the official release APK over HTTPS only after confirmation and does not uninstall an incompatible existing package.
 
 The goal is a clean, explainable optimizer that grows into a serious Windows management tool without becoming an unsafe "apply everything" script.
 
