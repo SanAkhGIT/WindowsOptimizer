@@ -206,8 +206,9 @@ class AndroidTvPanel(QWidget):
         row.addWidget(disable)
         row.addWidget(enable)
         layout.addLayout(row)
-        self.candidate_table = QTableWidget(0, 3)
-        self.candidate_table.setHorizontalHeaderLabels(["Package", "Current state", "Purpose / trade-off"])
+        self.candidate_table = QTableWidget(0, 4)
+        self.candidate_table.setHorizontalHeaderLabels(["Package", "Current state", "Purpose / trade-off", "Enabled toggle"])
+        self.candidate_table.itemChanged.connect(self._candidate_toggle_changed)
         self.candidate_table.setSelectionBehavior(QAbstractItemView.SelectionBehavior.SelectRows)
         self.candidate_table.setSelectionMode(QAbstractItemView.SelectionMode.SingleSelection)
         self.candidate_table.setEditTriggers(QAbstractItemView.EditTrigger.NoEditTriggers)
@@ -215,6 +216,7 @@ class AndroidTvPanel(QWidget):
         self.candidate_table.horizontalHeader().setSectionResizeMode(0, QHeaderView.ResizeMode.ResizeToContents)
         self.candidate_table.horizontalHeader().setSectionResizeMode(1, QHeaderView.ResizeMode.ResizeToContents)
         self.candidate_table.horizontalHeader().setSectionResizeMode(2, QHeaderView.ResizeMode.Stretch)
+        self.candidate_table.horizontalHeader().setSectionResizeMode(3, QHeaderView.ResizeMode.ResizeToContents)
         layout.addWidget(self.candidate_table, 1)
         self.tabs.addTab(page, "Apps & features")
 
@@ -476,6 +478,7 @@ class AndroidTvPanel(QWidget):
 
     def _populate_candidates(self, candidates):
         self._candidate_data = list(candidates or [])
+        self.candidate_table.blockSignals(True)
         self.candidate_table.setRowCount(0)
         for row, candidate in enumerate(self._candidate_data):
             self.candidate_table.insertRow(row)
@@ -484,10 +487,30 @@ class AndroidTvPanel(QWidget):
                 item = QTableWidgetItem(str(value))
                 item.setData(Qt.ItemDataRole.UserRole, candidate["package"])
                 self.candidate_table.setItem(row, column, item)
+            toggle = QTableWidgetItem("On" if candidate["state"] == "enabled" else "Off")
+            toggle.setData(Qt.ItemDataRole.UserRole, candidate["package"])
+            toggle.setFlags(toggle.flags() | Qt.ItemFlag.ItemIsUserCheckable | Qt.ItemFlag.ItemIsEnabled | Qt.ItemFlag.ItemIsSelectable)
+            toggle.setCheckState(Qt.CheckState.Checked if candidate["state"] == "enabled" else Qt.CheckState.Unchecked)
+            self.candidate_table.setItem(row, 3, toggle)
+        self.candidate_table.blockSignals(False)
         self.connection_status.setText(f"Loaded {len(self._candidate_data)} optional package candidate(s).")
         rendered = json.dumps(self._candidate_data, indent=2, ensure_ascii=False)
         self.output.setPlainText("ANDROID TV OPTIONAL-PACKAGE REVIEW\n" + rendered)
         self._show_detail(rendered)
+
+    def _candidate_toggle_changed(self, item):
+        if item.column() != 3:
+            return
+        row = item.row()
+        if row < 0 or row >= len(self._candidate_data):
+            return
+        candidate = self._candidate_data[row]
+        desired_enabled = item.checkState() == Qt.CheckState.Checked
+        currently_enabled = candidate.get("state") == "enabled"
+        if desired_enabled == currently_enabled:
+            return
+        self.candidate_table.setCurrentCell(row, 3)
+        self.change_selected_package(restore=desired_enabled)
 
     def _select_package(self):
         row = self.candidate_table.currentRow()
