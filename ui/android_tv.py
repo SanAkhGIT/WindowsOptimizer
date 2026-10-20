@@ -346,7 +346,33 @@ class AndroidTvPanel(QWidget):
         self._async("Read Android TV health", tv.health_check)
 
     def refresh_candidates(self):
-        self._async("Read optional-package candidates", tv.package_candidates)
+        try:
+            params = self._params()
+        except Exception as exc:
+            QMessageBox.warning(self, "Connection details", str(exc))
+            return
+        self.connection_status.setText("Working: read optional-package candidates…")
+        self.run_job(
+            lambda: tv.package_candidates(**params),
+            done=self._populate_candidates,
+            fail=lambda error: self._show_error("Read optional-package candidates", error),
+            label="Read optional-package candidates",
+        )
+
+    def _populate_candidates(self, candidates):
+        self._candidate_data = list(candidates or [])
+        self.candidate_table.setRowCount(0)
+        for row, candidate in enumerate(self._candidate_data):
+            self.candidate_table.insertRow(row)
+            values = (candidate["package"], candidate["state"], candidate["description"])
+            for column, value in enumerate(values):
+                item = QTableWidgetItem(str(value))
+                item.setData(Qt.ItemDataRole.UserRole, candidate["package"])
+                self.candidate_table.setItem(row, column, item)
+        self.connection_status.setText(f"Loaded {len(self._candidate_data)} optional package candidate(s).")
+        rendered = json.dumps(self._candidate_data, indent=2, ensure_ascii=False)
+        self.output.setPlainText("ANDROID TV OPTIONAL-PACKAGE REVIEW\n" + rendered)
+        self._show_detail(rendered)
 
     def _select_package(self):
         row = self.candidate_table.currentRow()
