@@ -443,8 +443,10 @@ def set_animation_scales_zero(tv_ip: str = "192.168.0.21", port: int = 5555, adb
     applied = []
     try:
         for namespace, key in ANIMATION_SETTINGS:
-            _put_setting(adb, serial, namespace, key, "0")
+            # Register before setting: verification may fail after Android has already
+            # accepted the new value, so this key must also be part of rollback.
             applied.append((namespace, key))
+            _put_setting(adb, serial, namespace, key, "0")
     except Exception:
         for namespace, key in reversed(applied):
             try:
@@ -460,7 +462,16 @@ def disable_screensaver(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path:
     connection = connect(tv_ip, port, adb_path)
     serial, adb = connection["serial"], connection["adb_path"]
     before = {"secure.screensaver_enabled": _read_setting(adb, serial, "secure", "screensaver_enabled")}
-    _put_setting(adb, serial, "secure", "screensaver_enabled", "0")
+    try:
+        _put_setting(adb, serial, "secure", "screensaver_enabled", "0")
+    except Exception as exc:
+        try:
+            _put_setting(adb, serial, "secure", "screensaver_enabled", before["secure.screensaver_enabled"])
+        except Exception as rollback_exc:
+            raise RuntimeError(
+                f"Setting screensaver_enabled failed ({exc}) and restoring the previous value also failed ({rollback_exc})."
+            ) from exc
+        raise
     _record_change(serial, "settings_batch", "Disable Android screensaver setting", before, {"secure.screensaver_enabled": "0"})
     return "Android screensaver setting disabled and verified. Exact previous value is saved for Undo."
 
