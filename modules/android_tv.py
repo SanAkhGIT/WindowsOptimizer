@@ -518,6 +518,41 @@ def tv_detox_layout(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: str
     return _read_tvhome_preferences(adb, serial)
 
 
+def _normalize_manual_tvhome_preferences(value: dict) -> dict:
+    """Validate a user-attested backup of tv-detox app/shortcut values."""
+    if not isinstance(value, dict) or set(value) != {"apps", "quick"}:
+        raise ValueError("Manual tv-detox backup must contain exactly 'apps' and 'quick'.")
+
+    raw_apps = value["apps"]
+    if raw_apps is None or (isinstance(raw_apps, str) and raw_apps.strip().lower() in ("", "auto")):
+        apps = None
+    elif isinstance(raw_apps, str):
+        apps = [part.strip() for part in raw_apps.split(",") if part.strip()]
+    elif isinstance(raw_apps, (list, tuple)):
+        apps = [str(part).strip() for part in raw_apps if str(part).strip()]
+    else:
+        raise ValueError("Manual prior app tiles must be 'auto', null, or a comma-separated package list.")
+    if apps is not None:
+        if len(apps) > 48 or len(apps) != len(set(apps)):
+            raise ValueError("Manual prior app tiles must contain at most 48 unique package IDs.")
+        if any(not re.fullmatch(r"[A-Za-z0-9_]+(?:\\.[A-Za-z0-9_]+)+", package) for package in apps):
+            raise ValueError("Manual prior tile list contains an invalid Android package ID.")
+
+    raw_quick = value["quick"]
+    if raw_quick is None or (isinstance(raw_quick, str) and raw_quick.strip().lower() in ("", "none")):
+        quick = []
+    elif isinstance(raw_quick, str):
+        quick = [part.strip().lower() for part in raw_quick.split(",") if part.strip()]
+    elif isinstance(raw_quick, (list, tuple)):
+        quick = [str(part).strip().lower() for part in raw_quick if str(part).strip()]
+    else:
+        raise ValueError("Manual prior shortcuts must be 'none', null, or a comma-separated shortcut list.")
+    allowed_quick = {"bluetooth", "sound", "picture"}
+    if len(quick) != len(set(quick)) or any(item not in allowed_quick for item in quick):
+        raise ValueError("Manual prior shortcuts may contain only unique bluetooth, sound, and picture values.")
+    return {"apps": ",".join(apps) if apps else None, "quick": ",".join(quick) if quick else None}
+
+
 def _set_tvhome_preferences(adb: str, serial: str, preferences: dict) -> None:
     apps = preferences.get("apps") or "auto"
     quick = preferences.get("quick") or "none"
@@ -535,6 +570,7 @@ def _set_tvhome_preferences(adb: str, serial: str, preferences: dict) -> None:
 def configure_tv_detox(
     apps: list[str] | None = None,
     quick_shortcuts: list[str] | None = None,
+    manual_before: dict | None = None,
     tv_ip: str = "192.168.0.21",
     port: int = 5555,
     adb_path: str | None = None,
@@ -552,7 +588,14 @@ def configure_tv_detox(
     _, enabled, _ = _package_sets(adb, serial)
     if TV_DETOX_PACKAGE not in enabled:
         raise RuntimeError("tv-detox is not confirmed enabled. Install or enable it before changing its layout.")
-    before = _read_tvhome_preferences(adb, serial)
+    manual_snapshot_used = False
+    try:
+        before = _read_tvhome_preferences(adb, serial)
+    except RuntimeError:
+        if manual_before is None:
+            raise
+        before = _normalize_manual_tvhome_preferences(manual_before)
+        manual_snapshot_used = True
     if selected_apps is not None:
         launchable = set(tv_launchable_apps(tv_ip, port, adb))
         invalid = sorted(set(selected_apps) - launchable)
@@ -579,7 +622,9 @@ def configure_tv_detox(
         serial, "tvhome_config", "Customize tv-detox app tiles and shortcuts",
         before, after,
     )
-    return "tv-detox layout updated. Previous app/shortcut preferences were backed up for exact Undo."
+    if manual_snapshot_used:
+        return "tv-detox layout updated. The previous layout was recorded from the manual snapshot you attested matched the TV. Undo will restore those supplied values."
+    return "tv-detox layout updated. Previous app/shortcut preferences were read directly and saved for exact Undo."
 
 
 def _set_home_component(adb: str, serial: str, component: str) -> None:
