@@ -491,9 +491,9 @@ def _read_tvhome_preferences(adb: str, serial: str) -> dict:
     output = _shell(adb, serial, "run-as", TV_DETOX_PACKAGE, "cat", "shared_prefs/config.xml", check=False)
     if not output or "not debuggable" in output.lower() or "permission denied" in output.lower() or "unknown package" in output.lower():
         raise RuntimeError(
-            "Exact tv-detox layout backup is unavailable (the installed app may not allow run-as). "
-            "For safety, tile/shortcut changes are blocked rather than overwriting an unknown layout. "
-            "Edit app tiles directly on the TV by holding OK on a tile."
+            "Exact tv-detox layout backup is unavailable (the installed release may block run-as). "
+            "The desktop editor requires either readable preferences or a verified manual snapshot of the current app tile order and shortcuts. "
+            "If you cannot establish the current layout, edit app tiles directly on the TV by holding OK on a tile."
         )
     try:
         return _parse_tvhome_preferences(output)
