@@ -21,6 +21,7 @@ class AndroidTvPanel(QWidget):
         self.output = output
         self.run_job = run_job
         self._layout_loaded = False
+        self._layout_readable = False
         self._candidate_data = []
         self._build()
 
@@ -296,12 +297,49 @@ class AndroidTvPanel(QWidget):
         custom = QGroupBox("tv-detox app tiles and shortcuts")
         custom_layout = QVBoxLayout(custom)
         explain = QLabel(
-            "Load the current layout before editing. This editor refuses to apply if it cannot read and back up "
-            "the existing layout, so a release APK that blocks preference access will fail closed."
+            "Load the current layout first. If the official release APK blocks preference readback, you can still "
+            "edit from WindowsOptimizer by entering an exact manual snapshot of the current tile order and shortcuts. "
+            "The snapshot becomes the Undo state, so only use values you have verified on the TV."
         )
         explain.setObjectName("muted")
         explain.setWordWrap(True)
         custom_layout.addWidget(explain)
+
+        self.manual_backup_toggle = QCheckBox(
+            "Use a verified manual snapshot if tv-detox does not expose its saved preferences"
+        )
+        self.manual_backup_toggle.setEnabled(False)
+        self.manual_backup_toggle.toggled.connect(self._manual_backup_changed)
+        custom_layout.addWidget(self.manual_backup_toggle)
+
+        self.manual_backup_group = QGroupBox("Snapshot of the CURRENT TV layout (before applying changes)")
+        manual_layout = QVBoxLayout(self.manual_backup_group)
+        manual_help = QLabel(
+            "Enter current app package IDs in the exact order shown on tv-detox, or explicitly confirm that "
+            "the current app row uses automatic discovery. Select current Bluetooth/Sound/Picture shortcuts too. "
+            "These values are used as the rollback snapshot when the APK prevents automatic readback."
+        )
+        manual_help.setObjectName("muted")
+        manual_help.setWordWrap(True)
+        manual_layout.addWidget(manual_help)
+        self.manual_current_auto = QCheckBox("Current app tiles use automatic discovery")
+        self.manual_current_auto.toggled.connect(self._manual_current_auto_changed)
+        manual_layout.addWidget(self.manual_current_auto)
+        self.manual_current_apps = QLineEdit()
+        self.manual_current_apps.setPlaceholderText(
+            "Current package IDs in exact on-screen order, e.g. org.smarttube.stable,com.netflix.ninja"
+        )
+        manual_layout.addWidget(self.manual_current_apps)
+        manual_quick_row = QHBoxLayout()
+        self.manual_quick_bluetooth = QCheckBox("Current: Bluetooth")
+        self.manual_quick_sound = QCheckBox("Current: Sound")
+        self.manual_quick_picture = QCheckBox("Current: Picture")
+        for widget in (self.manual_quick_bluetooth, self.manual_quick_sound, self.manual_quick_picture):
+            manual_quick_row.addWidget(widget)
+        manual_layout.addLayout(manual_quick_row)
+        self.manual_backup_group.setEnabled(False)
+        custom_layout.addWidget(self.manual_backup_group)
+
         load_row = QHBoxLayout()
         load = QPushButton("Load current layout")
         load.clicked.connect(self.load_tv_layout)
