@@ -6,9 +6,9 @@ set -euo pipefail
 UPSTREAM_REPO="https://github.com/Ansub/tv-detox.git"
 # Default to the upstream repository's current default branch. Set TV_DETOX_REF
 # to a tag or commit SHA for a reproducible, pinned build.
-UPSTREAM_REF="\${TV_DETOX_REF:-origin/HEAD}"
-SOURCE_DIR="\${RUNNER_TEMP:-\${TMPDIR:-/tmp}}/tv-detox-fizxix"
-OUTPUT_DIR="\${GITHUB_WORKSPACE:-$PWD}/dist"
+UPSTREAM_REF="${TV_DETOX_REF:-HEAD}"
+SOURCE_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/tv-detox-fizxix"
+OUTPUT_DIR="${GITHUB_WORKSPACE:-$PWD}/dist"
 
 rm -rf "$SOURCE_DIR"
 git clone --no-checkout "$UPSTREAM_REPO" "$SOURCE_DIR"
