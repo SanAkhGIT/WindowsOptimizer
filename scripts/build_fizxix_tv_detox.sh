@@ -97,4 +97,12 @@ cd "$SOURCE_DIR"
 sh build.sh
 mkdir -p "$OUTPUT_DIR"
 cp out/tvhome.apk "$OUTPUT_DIR/FIZXIX-TV-Detox.apk"
+cp LICENSE "$OUTPUT_DIR/FIZXIX-TV-Detox-LICENSE.txt"
+cat > "$OUTPUT_DIR/FIZXIX-TV-Detox-NOTICE.txt" <<'NOTICE'
+FIZXIX Home is a modified build based on TV Detox by Ansub.
+Upstream source: https://github.com/Ansub/tv-detox
+The upstream MIT license is included as FIZXIX-TV-Detox-LICENSE.txt.
+FIZXIX-specific changes: separate package ID com.fizxix.tvhome, solid black background,
+and a fixed bottom-right "Modded by FIZXIX" watermark.
+NOTICE
 printf 'Built %s\n' "$OUTPUT_DIR/FIZXIX-TV-Detox.apk"
