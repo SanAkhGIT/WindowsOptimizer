@@ -4,13 +4,18 @@
 set -euo pipefail
 
 UPSTREAM_REPO="https://github.com/Ansub/tv-detox.git"
-UPSTREAM_COMMIT="e0bb6073c759baaefc0d4a7426556686e511033b"
-SOURCE_DIR="${RUNNER_TEMP:-${TMPDIR:-/tmp}}/tv-detox-fizxix"
-OUTPUT_DIR="${GITHUB_WORKSPACE:-$PWD}/dist"
+# Default to the upstream repository's current default branch. Set TV_DETOX_REF
+# to a tag or commit SHA for a reproducible, pinned build.
+UPSTREAM_REF="\${TV_DETOX_REF:-origin/HEAD}"
+SOURCE_DIR="\${RUNNER_TEMP:-\${TMPDIR:-/tmp}}/tv-detox-fizxix"
+OUTPUT_DIR="\${GITHUB_WORKSPACE:-$PWD}/dist"
 
 rm -rf "$SOURCE_DIR"
 git clone --no-checkout "$UPSTREAM_REPO" "$SOURCE_DIR"
+git -C "$SOURCE_DIR" fetch --force origin "$UPSTREAM_REF"
+UPSTREAM_COMMIT="$(git -C "$SOURCE_DIR" rev-parse FETCH_HEAD)"
 git -C "$SOURCE_DIR" checkout --detach "$UPSTREAM_COMMIT"
+printf 'TV Detox upstream ref: %s\nTV Detox upstream commit: %s\n' "$UPSTREAM_REF" "$UPSTREAM_COMMIT"
 
 python3 - "$SOURCE_DIR" <<'PY'
 from pathlib import Path
@@ -98,11 +103,14 @@ sh build.sh
 mkdir -p "$OUTPUT_DIR"
 cp out/tvhome.apk "$OUTPUT_DIR/FIZXIX-TV-Detox.apk"
 cp LICENSE "$OUTPUT_DIR/FIZXIX-TV-Detox-LICENSE.txt"
-cat > "$OUTPUT_DIR/FIZXIX-TV-Detox-NOTICE.txt" <<'NOTICE'
+cat > "$OUTPUT_DIR/FIZXIX-TV-Detox-NOTICE.txt" <<NOTICE
 FIZXIX Home is a modified build based on TV Detox by Ansub.
 Upstream source: https://github.com/Ansub/tv-detox
+Upstream ref: $UPSTREAM_REF
+Upstream commit: $UPSTREAM_COMMIT
 The upstream MIT license is included as FIZXIX-TV-Detox-LICENSE.txt.
 FIZXIX-specific changes: separate package ID com.fizxix.tvhome, solid black background,
 and a fixed bottom-right "Modded by FIZXIX" watermark.
 NOTICE
-printf 'Built %s\n' "$OUTPUT_DIR/FIZXIX-TV-Detox.apk"
+printf '%s\n' "$UPSTREAM_COMMIT" > "$OUTPUT_DIR/FIZXIX-TV-Detox-UPSTREAM-COMMIT.txt"
+printf 'Built %s from upstream commit %s\n' "$OUTPUT_DIR/FIZXIX-TV-Detox.apk" "$UPSTREAM_COMMIT"
