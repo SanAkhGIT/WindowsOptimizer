@@ -139,11 +139,12 @@ def _adb_path(preferred: str | None = None) -> str:
 
 def target_serial(tv_ip: str, port: int = 5555) -> str:
     try:
-        ip = str(ipaddress.ip_address((tv_ip or "").strip()))
+        parsed_ip = ipaddress.ip_address((tv_ip or "").strip())
     except ValueError as exc:
         raise ValueError("Enter the TV's IPv4/IPv6 address, not an ADB command or port.") from exc
     if not isinstance(port, int) or not 1 <= port <= 65535:
         raise ValueError("ADB port must be between 1 and 65535.")
+    ip = f"[{parsed_ip}]" if parsed_ip.version == 6 else str(parsed_ip)
     return f"{ip}:{port}"
 
 
@@ -640,12 +641,22 @@ def restore_google_tv_home(tv_ip: str = "192.168.0.21", port: int = 5555, adb_pa
         if not actual or not actual.startswith(GOOGLE_TV_LAUNCHER + "/"):
             raise RuntimeError(f"Google TV Home verification failed (current={actual}).")
     except Exception as exc:
+        rollback_error = None
         try:
             _set_home_component(adb, serial, previous_home)
-        finally:
-            if was_disabled:
-                _shell(adb, serial, "pm", "disable-user", "--user", "0", GOOGLE_TV_LAUNCHER, check=False)
-        raise RuntimeError(f"Google TV Home failed; prior Home restoration was attempted: {exc}") from exc
+        except Exception as rollback_exc:
+            rollback_error = rollback_exc
+        # Never disable the newly enabled stock launcher if restoring the previous Home failed:
+        # leaving it available is safer than risking no usable HOME activity.
+        if was_disabled and rollback_error is None:
+            _shell(adb, serial, "pm", "disable-user", "--user", "0", GOOGLE_TV_LAUNCHER, check=False)
+        if rollback_error is not None:
+            raise RuntimeError(
+                f"Google TV Home failed ({exc}); restoring previous Home also failed ({rollback_error}). "
+                f"The stock launcher was left enabled as a recovery path. Emergency command: "
+                f"adb -s {serial} shell pm enable {GOOGLE_TV_LAUNCHER}"
+            ) from exc
+        raise RuntimeError(f"Google TV Home failed; previous Home restored: {exc}") from exc
     _record_change(
         serial, "google_home", "Restore Google TV Launcher as Home",
         {"home": previous_home, "launcher_was_disabled": was_disabled},
@@ -690,8 +701,10 @@ def install_or_update_tv_detox(tv_ip: str = "192.168.0.21", port: int = 5555, ad
             f"ADB said: {result}"
         )
     installed, enabled, disabled = _package_sets(adb, serial)
-    if TV_DETOX_PACKAGE not in installed or TV_DETOX_PACKAGE in disabled:
+    if TV_DETOX_PACKAGE not in installed:
         raise RuntimeError("APK installer reported success, but package verification failed.")
+    if TV_DETOX_PACKAGE in disabled:
+        return f"Official tv-detox was installed/updated for {serial}, but remains disabled as before. Enable it explicitly before setting it as Home. No package was uninstalled."
     return f"Installed/updated official tv-detox for {serial}. APK cached at {apk_path}. No package was uninstalled."
 
 
@@ -729,13 +742,17 @@ def undo_last_change(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: st
         if item.get("event") == "change" and item.get("target") == serial and item.get("id") not in undone
     ]
     if not pending:
-        return "No undoable WindowsOptimizer TV changes are recorded for this device."
-    latest = pending[-1]
-    if not latest.get("reversible", False):
-        return (
-            f"The newest recorded operation has no automatic inverse: {latest.get('description', latest.get('kind'))}. "
-            "No older change was undone."
-        )
+        return "No pending WindowsOptimizer TV changes are recorded for this device."
+    reversible = [item for item in pending if item.get("reversible", False)]
+    if not reversible:
+        names = ", ".join(item.get("description", item.get("kind", "operation")) for item in pending[-3:])
+        return f"No automatic inverse exists for the pending TV operations: {names}. No device setting was changed."
+    latest = reversible[-1]
+    newer_without_inverse = [
+        item.get("description", item.get("kind", "operation"))
+        for item in pending[pending.index(latest) + 1:]
+        if not item.get("reversible", False)
+    ]
     kind, before = latest.get("kind"), latest.get("before") or {}
     if kind == "package_disabled":
         package = latest.get("after", {}).get("package")
@@ -780,4 +797,7 @@ def undo_last_change(tv_ip: str = "192.168.0.21", port: int = 5555, adb_path: st
             "event": "undo", "change_id": latest["id"], "target": serial,
             "utc": datetime.now(timezone.utc).isoformat(),
         }) + "\n")
-    return f"Undid the latest change: {latest.get('description', kind)}"
+    message = f"Undid the latest reversible change: {latest.get('description', kind)}"
+    if newer_without_inverse:
+        message += "\nNewer operations left untouched because they have no inverse: " + "; ".join(newer_without_inverse)
+    return message
