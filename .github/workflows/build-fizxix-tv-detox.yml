@@ -49,6 +49,26 @@ jobs:
       - name: Build black FIZXIX launcher
         run: bash scripts/build_fizxix_tv_detox.sh
 
+      - name: Smoke test on Android TV emulator
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 30
+          target: android-tv
+          arch: x86
+          profile: tv_1080p
+          disable-animations: true
+          script: |
+            sh "$RUNNER_TEMP/tv-detox-fizxix/ci/smoke-test.sh" emulator-5554 "$RUNNER_TEMP/fizxix-smoke.png"
+
+      - name: Upload emulator screenshot
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: FIZXIX-TV-Detox-Smoke-Test
+          path: ${{ runner.temp }}/fizxix-smoke*.png
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
