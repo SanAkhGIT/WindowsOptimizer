@@ -194,6 +194,145 @@ if content.count(method_anchor) != 1:
 content = content.replace(method_anchor, settings_method + method_anchor, 1)
 activity.write_text(content, encoding="utf-8")
 
+# The physical key may be consumed by Android before MainActivity receives it.
+# Add a user-enabled AccessibilityService to filter hardware keys globally. It does
+# not inspect window content or handle gestures; it only handles Settings/Menu keys
+# and the unknown key from RemoteG10 Consumer Control.
+manifest_content = manifest.read_text(encoding="utf-8")
+version_match = 'android:versionCode="14" android:versionName="1.5.1"'
+if manifest_content.count(version_match) != 1:
+    raise SystemExit("Could not safely bump the expected upstream app version.")
+manifest_content = manifest_content.replace(version_match,
+    'android:versionCode="15" android:versionName="1.5.2"', 1)
+service_manifest = """        <service
+            android:name=".RemoteKeyAccessibilityService"
+            android:label="FIZXIX Remote Key Handler"
+            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.accessibilityservice.AccessibilityService" />
+            </intent-filter>
+            <meta-data
+                android:name="android.accessibilityservice"
+                android:resource="@xml/fizxix_remote_key_service" />
+        </service>
+"""
+activity_tag = '        <activity android:name=".MainActivity"'
+if manifest_content.count(activity_tag) != 1 or "RemoteKeyAccessibilityService" in manifest_content:
+    raise SystemExit("Could not safely insert the accessibility service into the manifest.")
+manifest_content = manifest_content.replace(activity_tag, service_manifest + activity_tag, 1)
+manifest.write_text(manifest_content, encoding="utf-8")
+
+resource = root / "res" / "xml" / "fizxix_remote_key_service.xml"
+resource.parent.mkdir(parents=True, exist_ok=True)
+resource.write_text("""<?xml version="1.0" encoding="utf-8"?>
+<accessibility-service xmlns:android="http://schemas.android.com/apk/res/android"
+    android:accessibilityEventTypes="typeAllMask"
+    android:accessibilityFeedbackType="feedbackGeneric"
+    android:accessibilityFlags="flagRequestFilterKeyEvents"
+    android:notificationTimeout="0"
+    android:canRetrieveWindowContent="false"
+    android:canRequestFilterKeyEvents="true" />
+""", encoding="utf-8")
+
+service = root / "src" / "com" / "ansub" / "tvhome" / "RemoteKeyAccessibilityService.java"
+service.write_text("""package com.fizxix.tvhome;
+
+import android.accessibilityservice.AccessibilityService;
+import android.accessibilityservice.AccessibilityServiceInfo;
+import android.content.Intent;
+import android.util.Log;
+import android.view.InputDevice;
+import android.view.KeyEvent;
+import android.view.accessibility.AccessibilityEvent;
+
+/** Rootless fallback for remote keys that do not reach MainActivity. */
+public final class RemoteKeyAccessibilityService extends AccessibilityService {
+    private static final String TAG = "FIZXIX-Remote";
+    private static final String REMOTE_DEVICE = "RemoteG10 Consumer Control";
+    // KeyEvent.getScanCode() is the Linux key code, not the separate MSC_SCAN HID usage.
+    private static final int LINUX_KEY_UNKNOWN = 240;
+
+    @Override
+    protected void onServiceConnected() {
+        super.onServiceConnected();
+        AccessibilityServiceInfo info = getServiceInfo();
+        if (info != null) {
+            info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
+            setServiceInfo(info);
+        }
+        Log.i(TAG, "Remote key accessibility filter connected.");
+    }
+
+    @Override
+    public boolean onKeyEvent(KeyEvent event) {
+        InputDevice device = InputDevice.getDevice(event.getDeviceId());
+        boolean remoteDevice = device != null && REMOTE_DEVICE.equals(device.getName());
+        boolean standardSettingsKey = event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
+                || event.getKeyCode() == KeyEvent.KEYCODE_MENU;
+        boolean unknownRemoteKey = remoteDevice
+                && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN;
+
+        if (unknownRemoteKey && event.getAction() == KeyEvent.ACTION_DOWN) {
+            Log.i(TAG, "RemoteG10 unknown key: scanCode=" + event.getScanCode()
+                    + ", deviceId=" + event.getDeviceId());
+        }
+
+        boolean gearKey = standardSettingsKey
+                || (unknownRemoteKey && event.getScanCode() == LINUX_KEY_UNKNOWN);
+        if (!gearKey) {
+            return false;
+        }
+
+        if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
+            Log.i(TAG, "Matched Settings/Menu key in accessibility filter: keyCode="
+                    + event.getKeyCode() + ", scanCode=" + event.getScanCode()
+                    + ", device=" + (device == null ? "<unknown>" : device.getName()));
+            openTvSettings();
+        }
+        // Consume down/up so the key cannot also trigger a second system action.
+        return true;
+    }
+
+    private void openTvSettings() {
+        try {
+            startActivity(new Intent()
+                    .setClassName("com.android.tv.settings", "com.android.tv.settings.MainSettings")
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            Log.i(TAG, "Requested main TV Settings.");
+        } catch (Exception explicitFailure) {
+            Log.w(TAG, "Explicit Settings component failed; trying ACTION_SETTINGS.", explicitFailure);
+            try {
+                startActivity(new Intent(android.provider.Settings.ACTION_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception fallbackFailure) {
+                Log.e(TAG, "Unable to launch TV Settings.", fallbackFailure);
+            }
+        }
+    }
+
+    @Override
+    public void onAccessibilityEvent(AccessibilityEvent event) {
+        // No window content is retrieved or read.
+    }
+
+    @Override
+    public void onInterrupt() {
+        Log.w(TAG, "Remote key accessibility filter interrupted.");
+    }
+}
+""", encoding="utf-8")
+
+# Add the new AccessibilityService XML resource to the minimal upstream aapt2 build.
+build_file = root / "build.sh"
+build_content = build_file.read_text(encoding="utf-8")
+old_link = '"$BT/aapt2" link -o out/base.apk -I "$JAR" --manifest AndroidManifest.xml --min-sdk-version 21 --target-sdk-version 34'
+new_link = '''"$BT/aapt2" compile --dir res -o out/compiled-resources.zip
+"$BT/aapt2" link -o out/base.apk -I "$JAR" -R out/compiled-resources.zip --manifest AndroidManifest.xml --min-sdk-version 21 --target-sdk-version 34'''
+if build_content.count(old_link) != 1:
+    raise SystemExit("Could not safely locate aapt2 link command.")
+build_file.write_text(build_content.replace(old_link, new_link, 1), encoding="utf-8")
+
 # Extend the upstream emulator smoke test to assert that the brand watermark is visible.
 smoke = root / "ci" / "smoke-test.sh"
 smoke_content = smoke.read_text(encoding="utf-8")
