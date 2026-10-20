@@ -6,7 +6,7 @@ from pathlib import Path
 from PySide6.QtCore import Qt
 from PySide6.QtWidgets import (
     QAbstractItemView, QCheckBox, QComboBox, QFileDialog, QFormLayout, QGroupBox, QHBoxLayout,
-    QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
+    QGridLayout, QHeaderView, QLabel, QLineEdit, QListWidget, QListWidgetItem, QMessageBox,
     QPushButton, QTabWidget, QTableWidget, QTableWidgetItem, QTextEdit, QVBoxLayout,
     QWidget,
 )
@@ -156,6 +156,21 @@ class AndroidTvPanel(QWidget):
         info.setObjectName("muted")
         info.setWordWrap(True)
         layout.addWidget(info)
+        self.health_values = {}
+        cards = QGridLayout()
+        for index, (key, heading) in enumerate((
+            ("connection", "Connection"), ("device", "Device"), ("android", "Android"),
+            ("memory", "Available RAM"), ("home", "Active Home"), ("changes", "Pending changes"),
+        )):
+            card = QGroupBox(heading)
+            card_layout = QVBoxLayout(card)
+            value = QLabel("Not scanned")
+            value.setWordWrap(True)
+            value.setObjectName("title")
+            card_layout.addWidget(value)
+            self.health_values[key] = value
+            cards.addWidget(card, index // 3, index % 3)
+        layout.addLayout(cards)
         buttons = QHBoxLayout()
         scan = QPushButton("Scan health")
         scan.clicked.connect(self.scan_health)
