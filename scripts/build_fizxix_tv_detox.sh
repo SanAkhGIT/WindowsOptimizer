@@ -168,6 +168,15 @@ settings_method = """    // Linux reports this remote's gear key as KEY_UNKNOWN 
 
     @Override
     public boolean dispatchKeyEvent(KeyEvent event) {
+        // Diagnostic: log every key delivered to the Activity, before any matching.
+        android.view.InputDevice diagDevice = android.view.InputDevice.getDevice(event.getDeviceId());
+        android.util.Log.i("FIZXIX-Remote", "ACTIVITY KEY action=" + event.getAction()
+                + " keyCode=" + event.getKeyCode() + " ("
+                + KeyEvent.keyCodeToString(event.getKeyCode()) + ") scanCode=" + event.getScanCode()
+                + " deviceId=" + event.getDeviceId() + " device="
+                + (diagDevice == null ? "<null>" : diagDevice.getName())
+                + " source=0x" + Integer.toHexString(event.getSource())
+                + " flags=0x" + Integer.toHexString(event.getFlags()));
         if (isFizxixSettingsKey(event)) {
             if (event.getAction() == KeyEvent.ACTION_DOWN && event.getRepeatCount() == 0) {
                 android.util.Log.i("FIZXIX-Remote", "Matched remote Settings key: keyCode="
@@ -203,7 +212,7 @@ version_match = 'android:versionCode="14" android:versionName="1.5.1"'
 if manifest_content.count(version_match) != 1:
     raise SystemExit("Could not safely bump the expected upstream app version.")
 manifest_content = manifest_content.replace(version_match,
-    'android:versionCode="15" android:versionName="1.5.2"', 1)
+    'android:versionCode="16" android:versionName="1.5.3"', 1)
 service_manifest = """        <service
             android:name=".RemoteKeyAccessibilityService"
             android:label="FIZXIX Remote Key Handler"
@@ -261,25 +270,53 @@ public final class RemoteKeyAccessibilityService extends AccessibilityService {
             info.flags |= AccessibilityServiceInfo.FLAG_REQUEST_FILTER_KEY_EVENTS;
             setServiceInfo(info);
         }
-        Log.i(TAG, "Remote key accessibility filter connected.");
+        Log.i(TAG, "Remote key accessibility filter connected. serviceInfo.flags=0x"
+                + Integer.toHexString(info == null ? -1 : info.flags)
+                + " versionName=1.5.3");
+        logInputDevices();
+    }
+
+    // Diagnostic: show which input devices Android knows about and how it names them.
+    private void logInputDevices() {
+        int[] ids = InputDevice.getDeviceIds();
+        for (int i = 0; i < ids.length; i++) {
+            InputDevice d = InputDevice.getDevice(ids[i]);
+            if (d == null) {
+                continue;
+            }
+            Log.i(TAG, "INPUT DEVICE id=" + ids[i] + " name=" + d.getName()
+                    + " vendor=0x" + Integer.toHexString(d.getVendorId())
+                    + " product=0x" + Integer.toHexString(d.getProductId())
+                    + " sources=0x" + Integer.toHexString(d.getSources())
+                    + " keyboardType=" + d.getKeyboardType());
+        }
     }
 
     @Override
     public boolean onKeyEvent(KeyEvent event) {
         InputDevice device = InputDevice.getDevice(event.getDeviceId());
+        String deviceName = device == null ? "<null>" : device.getName();
+
+        // Diagnostic: log EVERY key the accessibility filter sees, before any matching.
+        // If the gear key never appears here while getevent sees it, Android is not
+        // delivering it to Java at all.
+        Log.i(TAG, "A11Y KEY action=" + event.getAction()
+                + " keyCode=" + event.getKeyCode() + " ("
+                + KeyEvent.keyCodeToString(event.getKeyCode()) + ")"
+                + " scanCode=" + event.getScanCode()
+                + " deviceId=" + event.getDeviceId() + " device=" + deviceName
+                + " source=0x" + Integer.toHexString(event.getSource())
+                + " flags=0x" + Integer.toHexString(event.getFlags()));
+
         boolean remoteDevice = device != null && REMOTE_DEVICE.equals(device.getName());
         boolean standardSettingsKey = event.getKeyCode() == KeyEvent.KEYCODE_SETTINGS
                 || event.getKeyCode() == KeyEvent.KEYCODE_MENU;
         boolean unknownRemoteKey = remoteDevice
                 && event.getKeyCode() == KeyEvent.KEYCODE_UNKNOWN;
 
-        if (unknownRemoteKey && event.getAction() == KeyEvent.ACTION_DOWN) {
-            Log.i(TAG, "RemoteG10 unknown key: scanCode=" + event.getScanCode()
-                    + ", deviceId=" + event.getDeviceId());
-        }
-
-        boolean gearKey = standardSettingsKey
-                || (unknownRemoteKey && event.getScanCode() == LINUX_KEY_UNKNOWN);
+        // The scanCode == 240 assumption was never verified on this TV, so match any
+        // KEYCODE_UNKNOWN from the named remote and rely on the log above for the real value.
+        boolean gearKey = standardSettingsKey || unknownRemoteKey;
         if (!gearKey) {
             return false;
         }
@@ -313,8 +350,14 @@ public final class RemoteKeyAccessibilityService extends AccessibilityService {
 
     @Override
     public void onAccessibilityEvent(AccessibilityEvent event) {
-        // No window content is retrieved or read.
+        // No window content is retrieved or read. Log only the first event as a liveness check.
+        if (!loggedFirstEvent) {
+            loggedFirstEvent = true;
+            Log.i(TAG, "First accessibility event received: type=" + event.getEventType());
+        }
     }
+
+    private boolean loggedFirstEvent;
 
     @Override
     public void onInterrupt() {
