@@ -120,55 +120,27 @@ watermark = """        setContentView(scroller);
         watermarkParams.bottomMargin = px(20);
         contentRoot.addView(watermark, watermarkParams);
 
-        // Explicit FIZXIX gear control in the visible top-right corner, independent of upstream tile layout.
-        TextView gear = text(px(44), Color.WHITE, semibold);
-        gear.setText("⚙");
-        gear.setGravity(Gravity.CENTER);
-        gear.setContentDescription("FIZXIX Settings");
-        gear.setFocusable(true);
-        gear.setClickable(true);
-        FrameLayout.LayoutParams gearParams = new FrameLayout.LayoutParams(px(88), px(88), Gravity.TOP | Gravity.RIGHT);
-        gearParams.rightMargin = px(48);
-        gearParams.topMargin = px(36);
-        contentRoot.addView(gear, gearParams);
-        gear.setOnClickListener(v -> showFizxixSettings());
-        gear.setOnKeyListener((v, keyCode, event) -> {
-            if (event.getAction() == KeyEvent.ACTION_UP &&
-                    (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)) {
-                showFizxixSettings();
-                return true;
-            }
-            return false;
-        });
 """
 if content.count(needle) != 1:
     raise SystemExit("Could not safely locate setContentView(scroller); refusing to insert duplicate watermark.")
 content = content.replace(needle, watermark, 1)
 activity.write_text(content, encoding="utf-8")
 
-# Add an explicit settings dialog and remote-control key handling, independent of upstream tile layout.
+# Route the remote's Settings/Menu key directly to Bluetooth settings, without an extra on-screen gear.
 content = activity.read_text(encoding="utf-8")
-method_anchor = "    @Override\n    protected void onCreate(Bundle state) {"
-settings_method = """    private void showFizxixSettings() {
-        final String[] labels = {"TV settings", "Wi-Fi", "Bluetooth", "Sound", "Picture"};
-        final String[] actions = {Settings.ACTION_SETTINGS, Settings.ACTION_WIFI_SETTINGS,
-                Settings.ACTION_BLUETOOTH_SETTINGS, Settings.ACTION_SOUND_SETTINGS,
-                Settings.ACTION_DISPLAY_SETTINGS};
-        new android.app.AlertDialog.Builder(this)
-                .setTitle("FIZXIX Settings")
-                .setItems(labels, (dialog, which) -> {
-                    try { startActivity(new Intent(actions[which]).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
-                    catch (Exception ignored) {
-                        try { startActivity(new Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)); }
-                        catch (Exception ignoredAgain) {}
-                    }
-                }).show();
-    }
-
-    @Override
+method_anchor = "    @Override\\n    protected void onCreate(Bundle state) {"
+settings_method = """    @Override
     public boolean onKeyDown(int keyCode, KeyEvent event) {
         if (keyCode == KeyEvent.KEYCODE_SETTINGS || keyCode == KeyEvent.KEYCODE_MENU) {
-            showFizxixSettings();
+            try {
+                startActivity(new Intent(Settings.ACTION_BLUETOOTH_SETTINGS)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+            } catch (Exception ignored) {
+                try {
+                    startActivity(new Intent("com.google.android.intent.action.CONNECT_INPUT")
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK));
+                } catch (Exception ignoredAgain) {}
+            }
             return true;
         }
         return super.onKeyDown(keyCode, event);
@@ -176,7 +148,7 @@ settings_method = """    private void showFizxixSettings() {
 
 """
 if content.count(method_anchor) != 1:
-    raise SystemExit("Could not safely locate onCreate for settings handler insertion.")
+    raise SystemExit("Could not safely locate onCreate for Bluetooth key handler insertion.")
 content = content.replace(method_anchor, settings_method + method_anchor, 1)
 activity.write_text(content, encoding="utf-8")
 
@@ -189,7 +161,7 @@ watermark_check = clock_check + """echo "$x" | grep -q 'text="Modded by FIZXIX"'
 if smoke_content.count(clock_check) != 1:
     raise SystemExit("Could not find exactly one clock smoke-test check; refusing an ambiguous patch.")
 smoke.write_text(smoke_content.replace(clock_check, watermark_check, 1), encoding="utf-8")
-print("Applied FIZXIX skin: black background, watermark, visible top-right gear, settings dialog and remote-key handling.")
+print("Applied FIZXIX skin: black background, watermark, no extra gear, remote Settings/Menu key routes directly to Bluetooth settings.")
 PY
 
 cd "$SOURCE_DIR"
