@@ -3,6 +3,8 @@ name: Build Windows Executable
 on:
   push:
     branches: [main, "feature/**"]
+  schedule:
+    - cron: "41 6 * * 1"
   workflow_dispatch:
 
 concurrency:
